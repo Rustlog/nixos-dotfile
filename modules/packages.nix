@@ -53,17 +53,19 @@
         nbfc-linux grub2 qutebrowser glib lvm2
         openssl gsettings-desktop-schemas xorg.xinit
         xorg.xorgserver xorg.xinput xorg.xrandr
+        powertop
 
         # networking
         networkmanager dig wirelesstools
         sshfs nftables frp nmap net-tools
         networkmanagerapplet mtpfs simple-mtpfs
-        nmon dnsmasq hostapd
+        nmon dnsmasq hostapd protonvpn-gui
 
         # dev tools
         nasm gcc zig clang clang-tools
         libllvm llvm-manpages
         postgresql sqlite
+        gdb gdbgui valgrind traceroute
 
         # utilities
         zstd imagemagick numactl cameractrls
@@ -74,6 +76,9 @@
         libnotify lxappearance kdePackages.qt6ct
         kdePackages.breeze kdePackages.breeze-gtk
         kdePackages.breeze-icons
+
+        # just in case, if needed
+        wireshark termshark qbittorrent
 
         # admin toolbox
         nginx apacheHttpd
