@@ -16,14 +16,20 @@
                 libxcb-util libxext libxrandr
                 libxcomposite libxcursor libxdamage
                 libxfixes libxi gdk-pixbuf atk
-                adwaita-icon-theme
-                dbus-glib libxt
+                adwaita-icon-theme dbus-glib libxt
+                ffmpeg libva libvdpau libvpx libopus
             ];
         };
     };
 
     # system packages
     environment.systemPackages = with pkgs; [
+
+        # dev tools
+        nasm gcc zig clang clang-tools
+        libllvm llvm-manpages
+        postgresql sqlite gnumake
+        gdb gdbgui valgrind traceroute
 
         # wayland and session tools
         swayidle hyprlock swaylock swayimg
@@ -32,7 +38,7 @@
         fuzzel wl-clipboard
 
         # audio video and media stuff
-        vlc mpv mpvScripts.mpris feh imv inxi
+        vlc feh imv inxi mpv mpvScripts.mpris
         alsa-lib alsa-utils alsa-tools alsa-firmware
         libao calf easyeffects pavucontrol
         lsp-plugins cava librewolf playerctl
@@ -53,19 +59,14 @@
         nbfc-linux grub2 qutebrowser glib lvm2
         openssl gsettings-desktop-schemas xorg.xinit
         xorg.xorgserver xorg.xinput xorg.xrandr
-        powertop
+        powertop ffmpeg-full zbar wireguard-tools
+        openvpn file libva libvdpau libvpx libopus
 
         # networking
         networkmanager dig wirelesstools
         sshfs nftables frp nmap net-tools
         networkmanagerapplet mtpfs simple-mtpfs
         nmon dnsmasq hostapd protonvpn-gui
-
-        # dev tools
-        nasm gcc zig clang clang-tools
-        libllvm llvm-manpages
-        postgresql sqlite
-        gdb gdbgui valgrind traceroute
 
         # utilities
         zstd imagemagick numactl cameractrls
