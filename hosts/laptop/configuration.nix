@@ -32,8 +32,6 @@
     i18n.defaultLocale = "en_US.UTF-8";
 
     console = {
-        font = "ter-732b";
-        useXkbConfig = true; # use xkb.options in tty.
         packages = with pkgs; [
             terminus_font
         ];

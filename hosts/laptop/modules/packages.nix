@@ -1,51 +1,33 @@
 { config, lib, pkgs, ... }:
 
 {
-    # programs modules
-    programs = {
-        sway.enable = true;
-        git.enable = true;
-        bash.enable = true;
-        zsh.enable = true;
-        dconf.enable = true;
-        nix-ld = {
-            enable = true;
-            libraries = with pkgs; [
-                gtk4 gtk3 glib libGL mesa cairo pango
-                libdrm alsa-lib pciutils libx11 libxcb
-                libxcb-util libxext libxrandr
-                libxcomposite libxcursor libxdamage
-                libxfixes libxi gdk-pixbuf atk
-                adwaita-icon-theme dbus-glib libxt
-                ffmpeg libva libvdpau libvpx libopus
-            ];
-        };
-    };
+    nixpkgs.config.allowUnfree = true;
 
     # system packages
     environment.systemPackages = with pkgs; [
 
         # dev tools
         nasm gcc zig clang clang-tools
-        libllvm llvm-manpages
-        postgresql sqlite gnumake
+        libllvm llvm-manpages nodejs
+        postgresql sqlite gnumake deno
         gdb gdbgui valgrind traceroute
 
         # wayland and session tools
         swayidle hyprlock swaylock swayimg
         mako wlrctl wlr-randr swww foot alacritty
         hyprland hypridle hyprlock colord waybar
-        fuzzel wl-clipboard
+        fuzzel wl-clipboard grim slurp
 
         # audio video and media stuff
         vlc feh imv inxi mpv mpvScripts.mpris
         alsa-lib alsa-utils alsa-tools alsa-firmware
         libao calf easyeffects pavucontrol
         lsp-plugins cava librewolf playerctl
+        mullvad-browser
 
-        # daily workflow tools
+        # essential tools
         bash-completion bash-language-server
-        zsh-syntax-highlighting
+        zsh-syntax-highlighting pipx
         neovim vim nano ripgrep yazi tmux jq
         rsync bat eza lsd fzf ncdu dust gdu
 
@@ -61,6 +43,8 @@
         xorg.xorgserver xorg.xinput xorg.xrandr
         powertop ffmpeg-full zbar wireguard-tools
         openvpn file libva libvdpau libvpx libopus
+        nvtopPackages.full curl wget pciutils
+        gammastep jq most
 
         # networking
         networkmanager dig wirelesstools
@@ -68,7 +52,7 @@
         networkmanagerapplet mtpfs simple-mtpfs
         nmon dnsmasq hostapd protonvpn-gui
 
-        # utilities
+        # utilities, tools, and themes
         zstd imagemagick numactl cameractrls
         chafa fastfetch pastel guvcview tree
         shellcheck htop btop atop iftop tor
@@ -76,7 +60,8 @@
         wofi wofi-emoji emote smile rofi rofi-emoji
         libnotify lxappearance kdePackages.qt6ct
         kdePackages.breeze kdePackages.breeze-gtk
-        kdePackages.breeze-icons
+        kdePackages.breeze-icons kdePackages.dolphin
+        kdePackages.konsole
 
         # just in case, if needed
         wireshark termshark qbittorrent

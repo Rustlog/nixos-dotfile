@@ -6,8 +6,10 @@
     # bootloader config
     boot.loader = {
         systemd-boot.enable = false;
+        timeout = 1;
         grub = {
             enable = true;
+            timeoutStyle = "hidden";
             efiSupport = false;
             device = "nodev";
             enableCryptodisk = true;
@@ -29,7 +31,10 @@
             enable = true;
             theme = "bgrt";
         };
-
+        tmp = {
+            useTmpfs = true;
+            tmpfsSize = "80%";
+        };
         kernelParams = [ "quiet" "splash" ];
         consoleLogLevel = 3;
 
@@ -87,5 +92,12 @@
     # define architecture & add cpu microcode
     nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
     hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
+
+    # graphics stack
+    hardware.amdgpu.initrd.enable = true;
+    hardware.graphics = {
+        enable = true;
+        enable32Bit = true;
+    };
 }
 

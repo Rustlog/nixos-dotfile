@@ -8,7 +8,7 @@
             shell = pkgs.bash;
             extraGroups = [
                 "wheel" "audio" "input" "rtkit"
-                "disk" "kmem" "networkmanager" "video"
+                "disk" "kmem" "wireshark" "networkmanager" "video"
                 "storage" "kvm" "root"
             ];
         };

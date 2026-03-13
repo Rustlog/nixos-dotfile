@@ -10,7 +10,7 @@
 
         [Timer]
         OnBootSec=10m
-        OnUnitActiveSec=3d
+        OnUnitActiveSec=1d
         Persistent=true
         RandomizedDelaySec=0
 
