@@ -66,6 +66,7 @@
         tlp.enable = true;
         libinput.enable = true;
         xserver.enable = false;
+        udisks2.enable = true;
         openssh = {
             enable = true;
             settings = {
@@ -97,7 +98,7 @@
     # docker settings
     virtualisation = {
         docker = {
-            enable = false;
+            enable = true;
             daemon.settings = {
                 data-root = "/dt/containers/docker_containers/";
                 storage-driver = "overlay2";
@@ -140,6 +141,9 @@
                 RestartSec = 1;
             };
             wantedBy = [ "multi-user.target" ];
+        };
+        "docker" = {
+            wantedBy = lib.mkForce [];
         };
     };
 }

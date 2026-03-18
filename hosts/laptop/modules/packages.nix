@@ -11,12 +11,13 @@
         libllvm llvm-manpages nodejs
         postgresql sqlite gnumake deno
         gdb gdbgui valgrind traceroute
+        stdman cppreference-doc python3
 
         # wayland and session tools
         swayidle hyprlock swaylock swayimg
         mako wlrctl wlr-randr swww foot alacritty
         hyprland hypridle hyprlock colord waybar
-        fuzzel wl-clipboard grim slurp
+        fuzzel wl-clipboard grim slurp wf-recorder
 
         # audio video and media stuff
         vlc feh imv inxi mpv mpvScripts.mpris
@@ -24,6 +25,8 @@
         libao calf easyeffects pavucontrol
         lsp-plugins cava librewolf playerctl
         mullvad-browser
+        # DAWs
+        lmms ardour hydrogen carla
 
         # essential tools
         bash-completion bash-language-server
@@ -44,7 +47,8 @@
         powertop ffmpeg-full zbar wireguard-tools
         openvpn file libva libvdpau libvpx libopus
         nvtopPackages.full curl wget pciutils
-        gammastep jq most
+        gammastep jq most nix-tree nix-index
+        man-pages man-pages-posix
 
         # networking
         networkmanager dig wirelesstools
@@ -61,7 +65,9 @@
         libnotify lxappearance kdePackages.qt6ct
         kdePackages.breeze kdePackages.breeze-gtk
         kdePackages.breeze-icons kdePackages.dolphin
-        kdePackages.konsole
+        kdePackages.dolphin-plugins kdePackages.konsole
+        kdePackages.kio-extras cameractrls-gtk4 udisks
+        kdePackages.okular
 
         # just in case, if needed
         wireshark termshark qbittorrent
