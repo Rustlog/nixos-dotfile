@@ -71,8 +71,12 @@
            device = "/dev/disk/by-uuid/082D-5792";
            fsType = "vfat";
         };
-        "/dt" = {
-            device = "/dev/vg0/shared_dt";
+        "/DT" = {
+            device = "/dev/vg0/dt";
+            fsType = "ext4";
+        };
+        "/MEDIA" = {
+            device = "/dev/vg0/media";
             fsType = "ext4";
         };
     };

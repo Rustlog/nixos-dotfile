@@ -100,7 +100,7 @@
         docker = {
             enable = true;
             daemon.settings = {
-                data-root = "/dt/containers/docker_containers/";
+                data-root = "/DT/containers/docker_containers/";
                 storage-driver = "overlay2";
             };
         };

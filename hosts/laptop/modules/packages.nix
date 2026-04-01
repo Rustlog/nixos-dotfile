@@ -20,11 +20,11 @@
         fuzzel wl-clipboard grim slurp wf-recorder
 
         # audio video and media stuff
-        vlc feh imv inxi mpv mpvScripts.mpris
+        vlc feh imv inxi mpv mpvScripts.mpris obs-studio
         alsa-lib alsa-utils alsa-tools alsa-firmware
-        libao calf easyeffects pavucontrol
-        lsp-plugins cava librewolf playerctl
-        mullvad-browser
+        libao calf easyeffects pavucontrol lsp-plugins
+        cava librewolf playerctl jellyfin jellyfin-web
+        mpd ncmpcpp
         # DAWs
         lmms ardour hydrogen carla
 
@@ -41,7 +41,7 @@
         ryzenadj brightnessctl mesa mesa-demos
         exfatprogs e2fsprogs ntfs3g dosfstools
         vulkan-tools vulkan-loader vulkan-headers
-        nbfc-linux grub2 qutebrowser glib lvm2
+        nbfc-linux grub2 qutebrowser glib lvm2 lsof
         openssl gsettings-desktop-schemas xorg.xinit
         xorg.xorgserver xorg.xinput xorg.xrandr
         powertop ffmpeg-full zbar wireguard-tools
@@ -56,10 +56,10 @@
         networkmanagerapplet mtpfs simple-mtpfs
         nmon dnsmasq hostapd protonvpn-gui
 
-        # utilities, tools, and themes
+        # utilities, tools, themes and extras
         zstd imagemagick numactl cameractrls
         chafa fastfetch pastel guvcview tree
-        shellcheck htop btop atop iftop tor
+        shellcheck htop btop atop iftop tor nload
         tor-browser procs yt-dlp efibootmgr duf
         wofi wofi-emoji emote smile rofi rofi-emoji
         libnotify lxappearance kdePackages.qt6ct
@@ -67,7 +67,8 @@
         kdePackages.breeze-icons kdePackages.dolphin
         kdePackages.dolphin-plugins kdePackages.konsole
         kdePackages.kio-extras cameractrls-gtk4 udisks
-        kdePackages.okular
+        kdePackages.okular kdePackages.qttools
+        kdePackages.kdeconnect-kde kdePackages.kclock
 
         # just in case, if needed
         wireshark termshark qbittorrent
