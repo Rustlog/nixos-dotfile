@@ -5,6 +5,25 @@
     # programs modules
     programs = {
         sway.enable = true;
+        hyprland.enable = true;
+        git.enable = true;
+        bash.enable = true;
+        bash.completion.enable = true;
+        zsh.enable = true;
+        wireshark.enable = true;
+        dconf.enable = true;
+        nix-ld = {
+            enable = true;
+            libraries = with pkgs; [
+                gtk4 gtk3 glib libGL mesa cairo pango
+                libdrm alsa-lib pciutils libx11 libxcb
+                libxcb-util libxext libxrandr
+                libxcomposite libxcursor libxdamage
+                libxfixes libxi gdk-pixbuf atk
+                adwaita-icon-theme dbus-glib libxt
+                ffmpeg libva libvdpau libvpx libopus
+            ];
+        };
         foot = {
             enable = true;
             settings = {
@@ -32,23 +51,6 @@
                     hide-when-typing = true;
                 };
             };
-        };
-        git.enable = true;
-        bash.enable = true;
-        zsh.enable = true;
-        wireshark.enable = true;
-        dconf.enable = true;
-        nix-ld = {
-            enable = true;
-            libraries = with pkgs; [
-                gtk4 gtk3 glib libGL mesa cairo pango
-                libdrm alsa-lib pciutils libx11 libxcb
-                libxcb-util libxext libxrandr
-                libxcomposite libxcursor libxdamage
-                libxfixes libxi gdk-pixbuf atk
-                adwaita-icon-theme dbus-glib libxt
-                ffmpeg libva libvdpau libvpx libopus
-            ];
         };
     };
 

@@ -8,9 +8,7 @@
     outputs = { nixpkgs, ... }@inputs:
         let
             system = "x86_64-linux";
-            laptop = "laptop";
-            desktop = "desktop";
-            default_HOST = laptop;
+            default_HOST = "laptop";
         in {
             nixosConfigurations."${default_HOST}" = nixpkgs.lib.nixosSystem {
                 system = "${system}";

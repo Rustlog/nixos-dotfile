@@ -12,9 +12,9 @@
             shell = pkgs.bashInteractive;
             group = "self";
             extraGroups = [
-                "wheel" "audio" "input" "rtkit"
-                "disk" "kmem" "wireshark" "networkmanager" "video"
-                "storage" "kvm" "root"
+                "wheel" "audio" "input" "disk" "kvm"
+                "kmem" "wireshark" "networkmanager"
+                "video" "storage" "root"
             ];
         };
         "guest" = {

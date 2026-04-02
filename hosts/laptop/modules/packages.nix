@@ -14,10 +14,13 @@
         stdman cppreference-doc python3
 
         # wayland and session tools
+        # sway & hyprland
         swayidle hyprlock swaylock swayimg
         mako wlrctl wlr-randr swww foot alacritty
         hyprland hypridle hyprlock colord waybar
         fuzzel wl-clipboard grim slurp wf-recorder
+        # kde plasma
+        kdePackages.plasma-workspace
 
         # audio video and media stuff
         vlc feh imv inxi mpv mpvScripts.mpris obs-studio
@@ -48,7 +51,7 @@
         openvpn file libva libvdpau libvpx libopus
         nvtopPackages.full curl wget pciutils
         gammastep jq most nix-tree nix-index
-        man-pages man-pages-posix
+        man-pages man-pages-posix gptfdisk
 
         # networking
         networkmanager dig wirelesstools
