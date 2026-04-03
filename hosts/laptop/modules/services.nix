@@ -144,6 +144,24 @@
             };
             wantedBy = [ "multi-user.target" ];
         };
+        "vtconsole_font" = {
+            enable = true;
+            description = "vtconsole font";
+            serviceConfig = {
+                ExecStart = ''
+                    /bin/sh -c \
+                        'CONFIG="/etc/vtconsole.conf" VTs="/dev/tty[0-9]" FONT="ter-v24b"; \
+                        [ -r "$''${CONFIG}" ] && . "$''${CONFIG}"; \
+                        for tty in $''${VTs}; do \
+                            [ -c "$''${tty}" ] || continue; \
+                            ${pkgs.kbd}/bin/setfont -C "$''${tty}" "$''${FONT}"; \
+                        done'
+                '';
+                Type = "oneshot";
+                Restart = "no";
+            };
+            wantedBy = [ "multi-user.target" ];
+        };
         "docker" = {
             wantedBy = lib.mkForce [];
         };
