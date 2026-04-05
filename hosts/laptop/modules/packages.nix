@@ -51,7 +51,8 @@
         openvpn file libva libvdpau libvpx libopus
         nvtopPackages.full curl wget pciutils
         gammastep jq most nix-tree nix-index
-        man-pages man-pages-posix gptfdisk
+        man-pages man-pages-posix gptfdisk gnupg
+        smartmontools
 
         # networking
         networkmanager dig wirelesstools

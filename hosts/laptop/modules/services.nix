@@ -4,8 +4,16 @@
 
     # programs modules
     programs = {
-        sway.enable = true;
-        hyprland.enable = true;
+        sway = {
+            enable = true; # sway WM
+            extraSessionCommands = ''
+                export GTK_THEME=Breeze:dark
+                export QT_QPA_PLATFORMTHEME=qt6ct
+                export WLR_RENDERER=vulkan
+            '';
+        };
+        hyprland.enable = true; # hyprland WM
+
         git.enable = true;
         bash.enable = true;
         bash.completion.enable = true;
@@ -65,6 +73,8 @@
                 clear_password = true;
             };
         };
+        power-profiles-daemon.enable = false;
+        desktopManager.plasma6.enable = true; # KDE plasma6
         tlp.enable = true;
         libinput.enable = true;
         xserver.enable = false;
@@ -147,6 +157,11 @@
         "vtconsole_font" = {
             enable = true;
             description = "vtconsole font";
+            unitConfig = {
+                Requires = [ "systemd-vconsole-setup.service" ];
+                After = [ "systemd-vconsole-setup.service" ];
+                Before = [ "displayManager.service" ];
+            };
             serviceConfig = {
                 ExecStart = ''
                     /bin/sh -c \
@@ -154,7 +169,9 @@
                         [ -r "$''${CONFIG}" ] && . "$''${CONFIG}"; \
                         for tty in $''${VTs}; do \
                             [ -c "$''${tty}" ] || continue; \
-                            ${pkgs.kbd}/bin/setfont -C "$''${tty}" "$''${FONT}"; \
+                            until ${pkgs.kbd}/bin/setfont -C "$''${tty}" "$''${FONT}"; do \
+                                ${pkgs.coreutils-full}/bin/sleep 0.1; \
+                            done \
                         done'
                 '';
                 Type = "oneshot";
