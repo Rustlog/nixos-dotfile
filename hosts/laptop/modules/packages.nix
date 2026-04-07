@@ -53,6 +53,8 @@
         gammastep jq most nix-tree nix-index
         man-pages man-pages-posix gptfdisk gnupg
         smartmontools
+        nginx apacheHttpd
+        qemu_full
 
         # networking
         networkmanager dig wirelesstools
@@ -62,9 +64,9 @@
 
         # utilities, tools, themes and extras
         zstd imagemagick numactl cameractrls
-        chafa fastfetch pastel guvcview tree
+        chafa fastfetch pastel guvcview tree p7zip
         shellcheck htop btop atop iftop tor nload
-        tor-browser procs yt-dlp efibootmgr duf
+        tor-browser procs yt-dlp efibootmgr duf graphviz-nox
         wofi wofi-emoji emote smile rofi rofi-emoji
         libnotify lxappearance kdePackages.qt6ct
         kdePackages.breeze kdePackages.breeze-gtk
@@ -77,11 +79,8 @@
         # just in case, if needed
         wireshark termshark qbittorrent
 
-        # admin toolbox
-        nginx apacheHttpd
+        # containers
         docker podman
-        qemu_full
-
     ];
 
     # system fonts
