@@ -65,9 +65,9 @@
         # utilities, tools, themes and extras
         zstd imagemagick numactl cameractrls
         chafa fastfetch pastel guvcview tree p7zip
-        shellcheck htop btop atop iftop tor nload
+        shellcheck htop btop atop iftop tor nload obsidian
         tor-browser procs yt-dlp efibootmgr duf graphviz-nox
-        wofi wofi-emoji emote smile rofi rofi-emoji
+        wofi wofi-emoji emote smile rofi rofi-emoji gtypist
         libnotify lxappearance kdePackages.qt6ct
         kdePackages.breeze kdePackages.breeze-gtk
         kdePackages.breeze-icons kdePackages.dolphin

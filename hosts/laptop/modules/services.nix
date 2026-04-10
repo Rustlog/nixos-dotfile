@@ -88,7 +88,7 @@
         docker = {
             enable = true;
             daemon.settings = {
-                data-root = "/DT/containers/docker_containers/";
+                data-root = "/shared/containers/docker_containers/";
                 storage-driver = "overlay2";
             };
         };

@@ -23,7 +23,7 @@
     environment.etc."containers/storage.conf".text = ''
         [storage]
         driver = "overlay"
-        graphroot = "/DT/containers/podman_containers/storage/"
+        graphroot = "/shared/containers/podman_containers/storage/"
         runroot = "/run/containers/storage/"
     '';
 }
