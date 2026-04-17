@@ -47,6 +47,7 @@
         vscode-langservers-extracted
         yaml-language-server
         nginx-language-server
+        pyright
 
         # graphics productivity
         blender krita gimp inkscape

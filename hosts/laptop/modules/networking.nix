@@ -1,10 +1,10 @@
-{ config, ... }:
+{ hostname, ... }:
 
 {
     # system networking
     networking = {
         networkmanager.enable = true;
-        hostName = "nixos-btw";
+        hostName = hostname;
         nat.enable = false;
         nameservers = [ "127.0.0.1" ];
         firewall = {

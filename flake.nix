@@ -5,16 +5,20 @@
         nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     };
 
-    outputs = { nixpkgs, ... }@inputs:
+    outputs = { nixpkgs, ... }:
         let
+            hostname = "nixos-btw";
             system = "x86_64-linux";
-            default_HOST = "laptop";
-        in {
-            nixosConfigurations."${default_HOST}" = nixpkgs.lib.nixosSystem {
+            laptop = nixpkgs.lib.nixosSystem {
                 system = "${system}";
+                specialArgs = { inherit hostname; };
                 modules = [
-                    ./hosts/${default_HOST}/configuration.nix
+                    ./hosts/laptop/configuration.nix
                 ];
+            };
+        in {
+            nixosConfigurations = {
+                ${hostname} = laptop;
             };
         };
 }
