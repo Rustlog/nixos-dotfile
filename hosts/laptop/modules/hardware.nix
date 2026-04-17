@@ -57,6 +57,11 @@
         extraModulePackages = [ ];
     };
 
+    # kernel runtime parameters
+    boot.kernel.sysctl = {
+        "vm.swappiness" = 80;
+    };
+
     # partition/logical-volume mounts ( for /etc/fstab )
     fileSystems = {
         "/" = {
@@ -81,8 +86,8 @@
     zramSwap = {
         enable = true;
         algorithm = "zstd";
-        memoryPercent = 50;
-        priority = 100;
+        memoryPercent = 40;
+        priority = 20;
         swapDevices = 1;
     };
     swapDevices = [

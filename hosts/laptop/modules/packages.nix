@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ pkgs, ... }:
 
 {
     nixpkgs.config.allowUnfree = true;
@@ -26,22 +26,33 @@
         vlc feh imv inxi mpv mpvScripts.mpris obs-studio
         alsa-lib alsa-utils alsa-tools alsa-firmware
         libao calf easyeffects pavucontrol lsp-plugins
-        cava librewolf playerctl jellyfin jellyfin-web
-        mpd ncmpcpp
+        cava librewolf firefox-bin playerctl jellyfin
+        jellyfin-web mpd ncmpcpp
         # DAWs
         lmms ardour hydrogen carla
 
         # essential tools
-        bash-completion bash-language-server
-        zsh-syntax-highlighting pipx
-        neovim vim nano ripgrep yazi tmux jq
+        bash-completion
+        zsh-syntax-highlighting pipx kdePackages.kate
+        neovim vim nano micro-full ripgrep yazi tmux jq
         rsync bat eza lsd fzf ncdu dust gdu
+
+        # language servers
+        bash-language-server
+        nil # nix language
+        lua-language-server
+        typescript-language-server
+        rust-analyzer
+        gopls
+        vscode-langservers-extracted
+        yaml-language-server
+        nginx-language-server
 
         # graphics productivity
         blender krita gimp inkscape
 
         # system tools
-        ryzenadj brightnessctl mesa mesa-demos
+        ryzenadj brightnessctl mesa
         exfatprogs e2fsprogs ntfs3g dosfstools
         vulkan-tools vulkan-loader vulkan-headers
         nbfc-linux grub2 qutebrowser glib lvm2 lsof
@@ -52,7 +63,7 @@
         nvtopPackages.full curl wget pciutils
         gammastep jq most nix-tree nix-index
         man-pages man-pages-posix gptfdisk gnupg
-        smartmontools
+        smartmontools bc
         nginx apacheHttpd
         qemu_full
 
@@ -63,18 +74,19 @@
         nmon dnsmasq hostapd protonvpn-gui
 
         # utilities, tools, themes and extras
-        zstd imagemagick numactl cameractrls
+        zstd imagemagick numactl cameractrls exiftool
         chafa fastfetch pastel guvcview tree p7zip
         shellcheck htop btop atop iftop tor nload obsidian
         tor-browser procs yt-dlp efibootmgr duf graphviz-nox
         wofi wofi-emoji emote smile rofi rofi-emoji gtypist
-        libnotify lxappearance kdePackages.qt6ct
+        libnotify lxappearance kdePackages.qt6ct pandoc
         kdePackages.breeze kdePackages.breeze-gtk
         kdePackages.breeze-icons kdePackages.dolphin
         kdePackages.dolphin-plugins kdePackages.konsole
         kdePackages.kio-extras cameractrls-gtk4 udisks
         kdePackages.okular kdePackages.qttools
         kdePackages.kdeconnect-kde kdePackages.kclock
+        kdePackages.kcolorchooser pastel lf
 
         # just in case, if needed
         wireshark termshark qbittorrent

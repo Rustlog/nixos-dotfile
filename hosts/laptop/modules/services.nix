@@ -78,6 +78,11 @@
             enable = true;
             extraArgs = [ "--web-addr" "127.0.0.1:4000" ];
         };
+        journald.extraConfig = ''
+            Storage=volatile
+            SystemMaxUse=100M
+            RuntimeMaxUse=100M
+        '';
     };
 
     # rtkit for pipewire
