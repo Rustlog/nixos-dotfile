@@ -1,4 +1,4 @@
-{ config, lib, modulesPath, ... }:
+{ pkgs, config, lib, modulesPath, ... }:
 
 {
     imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
@@ -61,6 +61,7 @@
 
         kernelModules = [ "kvm-amd" ];
         extraModulePackages = [ ];
+        blacklistedKernelModules = [ "nouveau" "nvidiafb" "nova_core" ];
     };
 
     # kernel runtime parameters
@@ -105,10 +106,17 @@
     hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
 
     # graphics stack
+    services.xserver.videoDrivers = [ "nvidia" "amdgpu" ];
     hardware.amdgpu.initrd.enable = true;
     hardware.graphics = {
         enable = true;
         enable32Bit = true;
+        # extraPackages = with pkgs; [
+        # ];
+    };
+    hardware.nvidia = {
+        modesetting.enable = true;
+        open = false;
     };
 }
 

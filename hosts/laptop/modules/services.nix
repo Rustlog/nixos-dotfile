@@ -1,11 +1,11 @@
 { pkgs, lib, ... }:
 
 {
-
     # programs modules
     programs = {
         sway = {
             enable = true; # sway WM
+            extraOptions = [ "--unsupported-gpu" ];
             extraSessionCommands = ''
                 export GTK_THEME=Breeze:dark
                 export QT_QPA_PLATFORMTHEME=qt6ct

@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ pkgs, ... }:
 
 {
     imports = [
@@ -11,15 +11,6 @@
         ./modules/users.nix
         ./modules/nix.nix
     ];
-
-    # Programs
-    programs = {
-        sway.enable = true;
-        git.enable = true;
-        bash.enable = true;
-        zsh.enable = true;
-        nix-ld.enable = true;
-    };
 
     # XDG portals
     xdg.portal = {
