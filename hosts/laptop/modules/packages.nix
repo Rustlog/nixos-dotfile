@@ -64,7 +64,7 @@
         nvtopPackages.full curl wget pciutils
         gammastep jq most nix-tree nix-index
         man-pages man-pages-posix gptfdisk gnupg
-        smartmontools bc
+        smartmontools bc psmisc
         nginx apacheHttpd
         qemu_full
 
@@ -73,6 +73,7 @@
         sshfs nftables frp nmap net-tools
         networkmanagerapplet mtpfs simple-mtpfs
         nmon dnsmasq hostapd protonvpn-gui
+        iw iproute2 ethtool
 
         # utilities, tools, themes and extras
         zstd imagemagick numactl cameractrls exiftool
@@ -88,6 +89,8 @@
         kdePackages.okular kdePackages.qttools
         kdePackages.kdeconnect-kde kdePackages.kclock
         kdePackages.kcolorchooser pastel lf
+        powershell
+        ferdium
 
         # just in case, if needed
         wireshark termshark qbittorrent
