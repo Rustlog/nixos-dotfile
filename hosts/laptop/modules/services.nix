@@ -41,12 +41,24 @@
     # services module
     services = {
         displayManager = {
-            ly.enable = true;
-            ly.settings = {
-                animation = "colormix";
-                session_log = ".local/state/ly-session.log";
-                vi_mode = true; full_color = true;
-                clear_password = true;
+            # ly.enable = true;
+            # ly.settings = {
+            #     animation = "colormix";
+            #     session_log = ".local/state/ly-session.log";
+            #     vi_mode = true; full_color = true;
+            #     clear_password = true;
+            # };
+            sddm = {
+                enable = true;
+                wayland.enable = true;
+                wayland.compositor = "weston";
+                theme = "sddm-astronaut-theme";
+                extraPackages = with pkgs; [
+                    kdePackages.qtmultimedia
+                    kdePackages.qtvirtualkeyboard
+                    kdePackages.kirigami kdePackages.qtsvg
+                    kdePackages.qt5compat sddm-astronaut
+                ];
             };
         };
         power-profiles-daemon.enable = false;

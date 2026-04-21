@@ -15,10 +15,12 @@
 
         # wayland and session tools
         # sway & hyprland
-        swayidle hyprlock swaylock swayimg
+        swayidle hyprlock swaylock swayimg cage
         mako wlrctl wlr-randr swww foot alacritty
         hyprland hypridle hyprlock colord waybar
         fuzzel wl-clipboard grim slurp wf-recorder
+        bemoji
+
         # kde plasma
         kdePackages.plasma-workspace
 
@@ -80,7 +82,7 @@
         chafa fastfetch pastel guvcview tree p7zip
         shellcheck htop btop atop iftop tor nload obsidian
         tor-browser procs yt-dlp efibootmgr duf graphviz-nox
-        wofi wofi-emoji emote smile rofi rofi-emoji gtypist
+        wofi wofi-emoji emote rofi rofi-emoji gtypist
         libnotify lxappearance kdePackages.qt6ct pandoc
         kdePackages.breeze kdePackages.breeze-gtk
         kdePackages.breeze-icons kdePackages.dolphin
@@ -91,6 +93,12 @@
         kdePackages.kcolorchooser pastel lf
         powershell
         ferdium
+
+        # sddm displaymanager
+        kdePackages.sddm kdePackages.qtmultimedia
+        kdePackages.kirigami kdePackages.qtvirtualkeyboard
+        kdePackages.qt5compat kdePackages.qtsvg
+        sddm-astronaut
 
         # just in case, if needed
         wireshark termshark qbittorrent
