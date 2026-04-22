@@ -25,11 +25,13 @@
             libraries = with pkgs; [
                 gtk4 gtk3 glib libGL mesa cairo pango
                 libdrm alsa-lib pciutils libx11 libxcb
-                libxcb-util libxext libxrandr
+                libxcb-util libxext libxrandr libxrender
                 libxcomposite libxcursor libxdamage
-                libxfixes libxi gdk-pixbuf atk
+                libxfixes libxi gdk-pixbuf atk libxtst
                 adwaita-icon-theme dbus-glib libxt
                 ffmpeg libva libvdpau libvpx libopus
+                nss nspr dbus expat libdrm gdk-pixbuf
+                cups libgbm libxscrnsaver
             ];
         };
         foot = {

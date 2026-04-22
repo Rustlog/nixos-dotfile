@@ -68,7 +68,7 @@
         man-pages man-pages-posix gptfdisk gnupg
         smartmontools bc psmisc
         nginx apacheHttpd
-        qemu_full
+        qemu_full steam-run
 
         # networking
         networkmanager dig wirelesstools
@@ -91,7 +91,7 @@
         kdePackages.okular kdePackages.qttools
         kdePackages.kdeconnect-kde kdePackages.kclock
         kdePackages.kcolorchooser pastel lf
-        powershell
+        powershell gnome-pomodoro
         ferdium
 
         # sddm displaymanager
