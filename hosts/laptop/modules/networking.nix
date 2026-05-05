@@ -6,7 +6,7 @@
         networkmanager.enable = true;
         hostName = hostname;
         nat.enable = false;
-        nameservers = [ "127.0.0.1" "1.1.1.1" "8.8.8.8" ];
+        nameservers = [ "127.0.0.1" "8.8.8.8" ];
         firewall = {
             enable = true;
             allowedTCPPorts = [

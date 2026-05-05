@@ -164,9 +164,7 @@
                         [ -r "$''${CONFIG}" ] && . "$''${CONFIG}"; \
                         for tty in $''${VTs}; do \
                             [ -c "$''${tty}" ] || continue; \
-                            until ${pkgs.kbd}/bin/setfont -C "$''${tty}" "$''${FONT}"; do \
-                                ${pkgs.coreutils-full}/bin/sleep 0.1; \
-                            done \
+                            ${pkgs.kbd}/bin/setfont -C "$''${tty}" "$''${FONT}" || printf "%%s\n" "failed for $''${tty}"; \
                         done'
                 '';
                 Type = "oneshot";

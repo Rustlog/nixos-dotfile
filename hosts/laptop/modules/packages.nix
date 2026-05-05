@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, zen-browser, ... }:
 
 {
     nixpkgs.config.allowUnfree = true;
@@ -12,6 +12,7 @@
         postgresql sqlite gnumake deno
         gdb gdbgui valgrind traceroute
         stdman cppreference-doc python3
+        cppcheck go gh
 
         # wayland and session tools
         # sway & hyprland
@@ -30,6 +31,7 @@
         libao calf easyeffects pavucontrol lsp-plugins
         cava librewolf firefox-bin playerctl jellyfin
         jellyfin-web mpd ncmpcpp
+        zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.default
         # DAWs
         lmms ardour hydrogen carla
 
@@ -82,13 +84,13 @@
         chafa fastfetch pastel guvcview tree p7zip
         shellcheck htop btop atop iftop tor nload obsidian
         tor-browser procs yt-dlp efibootmgr duf graphviz-nox
-        wofi wofi-emoji emote rofi rofi-emoji gtypist
+        wofi wofi-emoji emote rofi rofi-emoji gtypist cloc
         libnotify lxappearance kdePackages.qt6ct pandoc
         kdePackages.breeze kdePackages.breeze-gtk
         kdePackages.breeze-icons kdePackages.dolphin
         kdePackages.dolphin-plugins kdePackages.konsole
         kdePackages.kio-extras cameractrls-gtk4 udisks
-        kdePackages.okular kdePackages.qttools
+        kdePackages.okular kdePackages.qttools pomodoro
         kdePackages.kdeconnect-kde kdePackages.kclock
         kdePackages.kcolorchooser pastel lf
         powershell gnome-pomodoro
@@ -103,8 +105,8 @@
         # just in case, if needed
         wireshark termshark qbittorrent
 
-        # containers
-        docker podman
+        # containers and LLMs
+        docker podman ollama
     ];
 
     # system fonts
