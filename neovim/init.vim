@@ -30,6 +30,9 @@ set backupcopy=yes
 set foldmethod=indent
 set foldlevel=40
 
+" enable virtualedit
+set virtualedit=block
+
 " Enable swap files (saves the cursor position and other information)
 set swapfile
 " Enable shada (persistent history and cursor position saving)
@@ -193,19 +196,19 @@ require("lazy").setup({
 local cmp_capabilities = require("cmp_nvim_lsp").default_capabilities()
 
 local lsp_servers = {
-    bashls = { },
-    rust_analyzer = { },
-    ts_ls = { },
-    lua_ls = { },
-    nil_ls = { },
-    clangd = { },
-    gopls = { },
-    yamlls = { },
-    html = { },
-    cssls = { },
-    jsonls = { },
-    nginx_language_server = { },
+    bashls  = { },
+    ts_ls   = { },
+    lua_ls  = { },
+    nil_ls  = { },
+    clangd  = { },
+    gopls   = { },
+    yamlls  = { },
+    html    = { },
+    cssls   = { },
+    jsonls  = { },
     pyright = { },
+    rust_analyzer         = { },
+    nginx_language_server = { },
 }
 
 for server,config in pairs(lsp_servers) do
@@ -253,8 +256,6 @@ autocmd BufWritePost *.sh,*.py if getline(1) =~ '^#!' | silent !chmod +x '%' | e
 
 " Set colorscheme based on filetype
 augroup ColorSchemeSelector
-    autocmd FileType     c,cpp  colorscheme tokyonight-moon |
-        \ highlight! ExtraWhitespace guibg=red ctermbg=red
     autocmd FileType     iss    colorscheme molokai |
         \ highlight! ExtraWhitespace guibg=red ctermbg=red
 augroup END

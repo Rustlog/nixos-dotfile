@@ -15,14 +15,14 @@ C_FLAGS := -std=c23
 RELEASE_C_FLAGS := -O3 -Wall -Wextra -Wpedantic \
                    -fstack-protector-strong -fno-common
 DEBUG_C_FLAGS := -DDEBUG -O0 -Wall -Wextra -Wpedantic -Werror -Wshadow \
-		-Wconversion -Wsign-conversion -Wundef -Wstrict-prototypes \
-		-Wmissing-prototypes -Wmissing-declarations -Wredundant-decls \
+        -Wconversion -Wsign-conversion -Wundef -Wstrict-prototypes \
+        -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls \
         -Wswitch-enum -Wswitch-default -Wformat=2 -Wformat-security \
-		-Wformat-overflow -Wfloat-equal -Wcast-align -Wcast-qual \
+        -Wformat-overflow -Wfloat-equal -Wcast-align -Wcast-qual \
         -Wdouble-promotion -Wvla -Wnull-dereference -Wunreachable-code \
         -fstack-protector-strong -fno-common -fstrict-aliasing \
-		-fno-omit-frame-pointer -fsanitize=address,undefined \
-		-fno-sanitize-recover=all -pedantic-errors -g
+        -fno-omit-frame-pointer -fsanitize=address,undefined \
+        -fno-sanitize-recover=all -pedantic-errors -g
 
 AUTO_MODE_ACTIONS := r run rm rmf e edit build
 

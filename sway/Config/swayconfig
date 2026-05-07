@@ -188,6 +188,7 @@ bar {
         for_window [app_id="^(Floating|Float|solid_f|floating|float)$"] floating enable, move position center
     # Enable floating (don't tile when launched)
         for_window [app_id="^(com.rtosta.zapzap|org.pulseaudio.pavucontrol)$"] floating enable
+        for_window [app_id="^(.*Pomodoro.*|.*pomodoro.*)$"] floating enable
         for_window [app_id="^(nm-connection-editor|.*smile|.*obsproject.*)$"] floating enable
         for_window [app_id="^(.*pavucontrol.*|.*easyeffects.*)$|waterfox*|vivaldi*"] floating enable
         for_window [app_id="^(org.kde.dolphin|xdg-desktop-portal.*|.*systemmonitor)$"] floating enable
@@ -521,15 +522,15 @@ bar {
                 bindsym $MOD+Print exec sh -c ' \
                     DIR="${HOME}/media/pictures/grim"; \
                     [ -d "${DIR}" ] || mkdir -p "${DIR}"; \
-                    OUTPUT="${DIR}/$(date +"%F_%T:$(printf "%d\n" "$(date +%N)" | cut -b1-2)").png"; \
-                    grim -t png -l 0 "${OUTPUT}" \
+                    OUTPUT="${DIR}/$(date +"%F_%T:$(printf "%d\n" "$(date +%N)" | cut -b1-2)").jpeg"; \
+                    grim -t jpeg -q 100 "${OUTPUT}" \
                 '
             # Screenshot of selected area (Mod+Shift+S)
                 bindsym $MOD+Shift+S exec sh -c ' \
                     DIR="${HOME}/media/pictures/grim"; \
                     [ -d "${DIR}" ] || mkdir -p "${DIR}"; \
-                    OUTPUT="${DIR}/$(date +"%F_%T:$(printf "%d\n" "$(date +%N)" | cut -b1-2)").png"; \
-                    grim -g "$(slurp -b aaccbb11)" -t png -l 0 "${OUTPUT}" \
+                    OUTPUT="${DIR}/$(date +"%F_%T:$(printf "%d\n" "$(date +%N)" | cut -b1-2)").jpeg"; \
+                    grim -g "$(slurp -b aaccbb11)" -t jpeg -q 100 "${OUTPUT}" \
                 '
 
         # Edit this (sway config) with neovim or vim
@@ -668,7 +669,7 @@ bar {
 
         # Journal time
             bindsym $MOD+grave+J exec foot --app-id=journal \
-            env VJOURNAL_DIR="/dt/dt/dev/journals" vjournal --loglevel=1 edit-log today -t default
+                env PATH="${PATH}:/usr/local/bin:/usr/bin:/bin:${HOME}/.bin/main" vjournal --loglevel=1 edit-log today -t daily
 
 
 ### Additional configuration

@@ -217,6 +217,8 @@ function Alias_vars() {
     alias diff="diff --color=auto"
     alias grep="grep --color=auto"
     alias ip="ip --color=auto"
+    alias cppcheck="cppcheck --enable=warning,style,performance,portability,information --inconclusive --std=c23"
+    alias cloc="cloc --quiet"
 
     # File operations alias
     alias mv="mv --verbose"
@@ -252,7 +254,6 @@ function Alias_vars() {
 
     # Application/tool aliases
     alias ncdu="ncdu --color dark"
-    alias qemu="qemu-system-x86_64"
     alias sway="env XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=sway WLR_RENDERER=vulkan sway &> /tmp/sway.log"
     alias VimBeGood="clear; podman run -it --rm brandoncc/vim-be-good && printf '\n' && clear"
     alias gtypistH="gtypist --personal-best --max-error=1.8 --no-welcome-screen --term-cursor --word-processor --always-sure"
@@ -263,6 +264,8 @@ function Alias_vars() {
     alias gcaf="git commit --amend --no-edit && git reflog expire --expire=now --all && git gc --prune=now"
     alias ttyper_H="ttyper --words 20 --language english-advanced"
     alias mpv="env VK_ICD_FILENAMES=\$(printf /usr/share/vulkan/icd.d/*radeon*x86_64.json) mpv --volume=44 --vid=auto --audio-device=pulse"
+    alias editor="\$EDITOR"
+    alias EDITOR="\$EDITOR"
     alias gdbgui="gdbgui --no-browser"
     alias "clang++"="clang++ -fdiagnostics-color=always"
     alias "clang"="clang -fdiagnostics-color=always"
@@ -270,6 +273,10 @@ function Alias_vars() {
     alias mirror_copy="rsync -aPh --fsync --delete"
     alias remote_copy="rsync -aPz --compress-choice=zstd"
     alias PAGER="bat --decorations=never --paging=always"
+    alias waterfox="waterfox&disown"
+    alias waterfox_dev="waterfox_dev&disown"
+    alias firefox="firefox&disown"
+    alias librewolf="librewolf&disown"
 
     # Metadata/file info aliases
     command -v exiftool &>/dev/null || alias exiftool="/usr/bin/vendor_perl/exiftool"
@@ -327,6 +334,24 @@ function Alias_vars() {
         QT_QPA_PLATFORMTHEME=qt6ct \
         GTK_THEME=Breeze:dark \
         WLR_RENDERER=vulkan sway --unsupported-gpu"
+
+    # compiler variables
+    CC="clang"
+    CFLAGS="-std=c23"
+    RELEASE_CFLAGS="-O2 -Wall -Werror -Wpedantic \
+        -fstack-protector-strong -fno-common"
+    DEBUG_CFLAGS="-DDEBUG -O0 -Wall -Werror -Wpedantic -Wextra -Wshadow \
+    -Wconversion -Wsign-conversion -Wundef -Wstrict-prototypes \
+    -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls \
+    -Wswitch-enum -Wswitch-default -Wformat=2 -Wformat-security \
+    -Wformat-overflow -Wfloat-equal -Wcast-align -Wcast-qual \
+    -Wdouble-promotion -Wvla -Wnull-dereference -Wunreachable-code \
+    -fstack-protector-strong -fno-common -fstrict-aliasing \
+    -fno-omit-frame-pointer -fsanitize=address,undefined \
+    -fno-sanitize-recover=all -pedantic-errors -g"
+    LINKER_FLAGS=""
+    DEBUG_LINKER_FLAGS="-fsanitize=address,undefined"
+    RELEASE_LINKER_FLAGS=""
 }
 
 ### Determine package manager
@@ -1280,17 +1305,17 @@ function Ip() {
 function update-grub() {
     local grub_config="/boot/grub/grub.cfg"
     sudo -v
-    run_cmd() {
+    run_cmd__() {
         local -a cmd=("${@}")
         log info "${cmd[*]}"
         "${cmd[@]}" # Run the command list
     }
     if [[ -f "${grub_config}.bak" ]]; then
-        run_cmd sudo cp "${grub_config}" "${grub_config}_$(date +%d-%b-%Y-%T_%p).bak"
+        run_cmd__ sudo cp "${grub_config}" "${grub_config}_$(date +%d-%b-%Y-%T_%p).bak"
     else
-        run_cmd sudo cp "${grub_config}" "${grub_config}.bak"
+        run_cmd__ sudo cp "${grub_config}" "${grub_config}.bak"
     fi
-    run_cmd sudo grub-mkconfig -o "${grub_config}"
+    run_cmd__ sudo grub-mkconfig -o "${grub_config}"
 }
 
 ### Sort by file size
@@ -1582,9 +1607,13 @@ function CurrencyConverter() {
     [[ -n "${amount}" ]] ||  \
         { log error "amount is unset"; return 1; }
 
-    local exchange_url="https://api.frankfurter.app/latest?from=${curr1}&to=${curr2}"
-    local rate="$(curl -fsSL "${exchange_url}" | jq -r '.rates.[]')"
-    awk -v rate="${rate}" -v amount="${amount}" 'BEGIN { printf "%.2f\n", (rate*amount); } '
+    local exchange_url="" rate="" result=""
+    exchange_url="https://api.frankfurter.app/latest?from=${curr1}&to=${curr2}"
+    rate="$(curl -fsSL "${exchange_url}" | jq -r '.rates.[]')"
+    result=$(awk -v rate="${rate}" -v amount="${amount}" 'BEGIN { printf "%.2f\n", (rate*amount); }')
+    log "*" "source: ${exchange_url}"
+    log "*" "rate: 1 ${curr1} -> ${rate} ${curr2}"
+    log "*" "amount: ${amount} ${curr1} => ${result} ${curr2}"
 }; alias usd_to_inr="CurrencyConverter USD INR"; alias inr_to_usd="CurrencyConverter INR USD"
 alias dollar_to_rupee="CurrencyConverter USD INR"; rupee_to_dollar="CurrencyConverter INR USD";
 
@@ -1727,6 +1756,11 @@ function y() {
     builtin cd -- "$(<"${tmp}")"
     rm -f "${tmp}"
 }; alias yc="clear; y"
+
+function run_cmd() {
+    log "*" "running: command ${*}"
+    command "${@}"
+}
 
 ### Start SSH agent on initial login
 function SSH_Agent() {

@@ -26,7 +26,7 @@ function toggle_theme() {
     background_img="${THEME_DIR}/$NUM/bg/bg"
 
     if [[ "$FOUND_SWWW" -eq 1 ]]; then
-        swww img "${background_img}" --transition-type fade --transition-duration 1
+        awww img "${background_img}" --transition-type fade --transition-duration 1
     else
         swaybg -o '*' -i "${background_img}" -m fill &>/dev/null &
     fi
@@ -52,9 +52,9 @@ function main() {
         TOTAL_AVAILABLE_THEMES=$((TOTAL_AVAILABLE_THEMES + 1))
     done
 
-    if command -v "swww-daemon" &> /dev/null; then
+    if command -v "awww-daemon" &> /dev/null; then
         FOUND_SWWW=1
-        pkill -f '.*swww-daemon'; swww-daemon &>/dev/null & disown
+        pkill -f '.*awww-daemon'; awww-daemon &>/dev/null & disown
     fi
 
     trap 'toggle_theme toggle_next_theme'     SIGUSR1
