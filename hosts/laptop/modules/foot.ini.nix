@@ -7,7 +7,7 @@ main = {
     font-italic = "SourceCodePro:size=18:weight=bold:slant=Italic";
     font-size-adjustment = "10%"; initial-window-size-pixels = "1200x600";
 };
-colors = {
+colors-dark = {
     regular1 = "F4005F"; regular2 = "A8E024"; regular3 = "FA8419";
     regular4 = "9D65FF"; regular5 = "F4005F"; regular6 = "58D1EB";
     regular7 = "C4C5B5"; bright1 = "F4005F"; bright2 = "A8E024";

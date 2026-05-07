@@ -17,7 +17,7 @@
         # wayland and session tools
         # sway & hyprland
         swayidle hyprlock swaylock swayimg cage
-        mako wlrctl wlr-randr swww foot alacritty
+        mako wlrctl wlr-randr awww foot alacritty
         hyprland hypridle hyprlock colord waybar
         fuzzel wl-clipboard grim slurp wf-recorder
         bemoji
@@ -61,8 +61,8 @@
         exfatprogs e2fsprogs ntfs3g dosfstools
         vulkan-tools vulkan-loader vulkan-headers
         nbfc-linux grub2 qutebrowser glib lvm2 lsof
-        openssl gsettings-desktop-schemas xorg.xinit
-        xorg.xorgserver xorg.xinput xorg.xrandr
+        openssl gsettings-desktop-schemas xinit
+        xorg-server xinput xrandr
         powertop ffmpeg-full zbar wireguard-tools
         openvpn file libva libvdpau libvpx libopus
         nvtopPackages.full curl wget pciutils
@@ -76,7 +76,7 @@
         networkmanager dig wirelesstools
         sshfs nftables frp nmap net-tools
         networkmanagerapplet mtpfs simple-mtpfs
-        nmon dnsmasq hostapd protonvpn-gui
+        nmon dnsmasq hostapd proton-vpn
         iw iproute2 ethtool
 
         # utilities, tools, themes and extras
