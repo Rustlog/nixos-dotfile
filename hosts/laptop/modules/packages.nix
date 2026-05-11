@@ -1,27 +1,10 @@
-{ pkgs, zen-browser, ... }:
+{ pkgs, unstable-pkgs, zen-browser, ... }:
 
 {
     nixpkgs.config.allowUnfree = true;
 
     # system packages
-    environment.systemPackages = with pkgs; [
-
-        # dev tools
-        nasm gcc zig clang clang-tools
-        libllvm llvm-manpages nodejs
-        postgresql sqlite gnumake deno
-        gdb gdbgui valgrind traceroute
-        stdman cppreference-doc python3
-        cppcheck go gh
-
-        # wayland and session tools
-        # sway & hyprland
-        swayidle hyprlock swaylock swayimg cage
-        mako wlrctl wlr-randr awww foot alacritty
-        hyprland hypridle hyprlock colord waybar
-        fuzzel wl-clipboard grim slurp wf-recorder
-        bemoji
-
+    environment.systemPackages = (with pkgs; [
         # kde plasma
         kdePackages.plasma-workspace
 
@@ -34,6 +17,75 @@
         zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.default
         # DAWs
         lmms ardour hydrogen carla
+
+        # graphics productivity
+        blender krita gimp inkscape
+
+        # system tools
+        ryzenadj brightnessctl mesa
+        exfatprogs e2fsprogs ntfs3g dosfstools
+        vulkan-tools vulkan-loader vulkan-headers
+        nbfc-linux grub2 qutebrowser glib lvm2 lsof
+        openssl gsettings-desktop-schemas
+        powertop ffmpeg-full zbar wireguard-tools
+        openvpn file libva libvdpau libvpx libopus
+        nvtopPackages.full curl wget pciutils groff
+        gammastep jq most nix-tree nix-index man
+        man-pages man-pages-posix gptfdisk gnupg
+        smartmontools bc psmisc
+        nginx apacheHttpd
+        qemu_full steam-run
+
+        # networking
+        networkmanager dig wirelesstools
+        sshfs nftables frp nmap net-tools
+        networkmanagerapplet mtpfs simple-mtpfs
+        nmon dnsmasq hostapd
+        iw iproute2 ethtool
+
+        # utilities, tools, themes and extras
+        zstd imagemagick numactl cameractrls exiftool
+        chafa fastfetch pastel guvcview tree p7zip
+        shellcheck htop btop atop iftop tor nload obsidian
+        tor-browser procs yt-dlp efibootmgr duf graphviz-nox
+        wofi wofi-emoji emote rofi rofi-emoji gtypist cloc
+        libnotify lxappearance kdePackages.qt6ct pandoc
+        kdePackages.breeze kdePackages.breeze-gtk rclone
+        kdePackages.breeze-icons kdePackages.dolphin
+        kdePackages.dolphin-plugins kdePackages.konsole
+        kdePackages.kio-extras cameractrls-gtk4 udisks
+        kdePackages.okular kdePackages.qttools pomodoro
+        kdePackages.kdeconnect-kde kdePackages.kclock
+        kdePackages.kcolorchooser pastel lf
+        powershell gnome-pomodoro
+        ferdium
+
+        # sddm displaymanager
+        kdePackages.sddm kdePackages.qtmultimedia
+        kdePackages.kirigami kdePackages.qtvirtualkeyboard
+        kdePackages.qt5compat kdePackages.qtsvg
+        sddm-astronaut
+
+        # just in case, if needed
+        wireshark termshark qbittorrent
+
+    ])
+    ++
+    (with unstable-pkgs; [
+        # dev tools
+        nasm gcc zig clang clang-tools
+        libllvm llvm-manpages nodejs
+        postgresql sqlite gnumake deno
+        gdb gdbgui valgrind traceroute
+        stdman cppreference-doc python3
+        cppcheck go gh hyperfine
+
+        # wayland and session tools
+        # sway & hyprland
+        swayidle hyprlock swaylock swayimg cage
+        mako wlrctl wlr-randr foot alacritty awww
+        hypridle hyprlock colord waybar
+        fuzzel wl-clipboard grim slurp wf-recorder
 
         # essential tools
         bash-completion
@@ -53,61 +105,15 @@
         nginx-language-server
         pyright
 
-        # graphics productivity
-        blender krita gimp inkscape
-
-        # system tools
-        ryzenadj brightnessctl mesa
-        exfatprogs e2fsprogs ntfs3g dosfstools
-        vulkan-tools vulkan-loader vulkan-headers
-        nbfc-linux grub2 qutebrowser glib lvm2 lsof
-        openssl gsettings-desktop-schemas xinit
-        xorg-server xinput xrandr
-        powertop ffmpeg-full zbar wireguard-tools
-        openvpn file libva libvdpau libvpx libopus
-        nvtopPackages.full curl wget pciutils
-        gammastep jq most nix-tree nix-index
-        man-pages man-pages-posix gptfdisk gnupg
-        smartmontools bc psmisc
-        nginx apacheHttpd
-        qemu_full steam-run
-
-        # networking
-        networkmanager dig wirelesstools
-        sshfs nftables frp nmap net-tools
-        networkmanagerapplet mtpfs simple-mtpfs
-        nmon dnsmasq hostapd proton-vpn
-        iw iproute2 ethtool
-
-        # utilities, tools, themes and extras
-        zstd imagemagick numactl cameractrls exiftool
-        chafa fastfetch pastel guvcview tree p7zip
-        shellcheck htop btop atop iftop tor nload obsidian
-        tor-browser procs yt-dlp efibootmgr duf graphviz-nox
-        wofi wofi-emoji emote rofi rofi-emoji gtypist cloc
-        libnotify lxappearance kdePackages.qt6ct pandoc
-        kdePackages.breeze kdePackages.breeze-gtk
-        kdePackages.breeze-icons kdePackages.dolphin
-        kdePackages.dolphin-plugins kdePackages.konsole
-        kdePackages.kio-extras cameractrls-gtk4 udisks
-        kdePackages.okular kdePackages.qttools pomodoro
-        kdePackages.kdeconnect-kde kdePackages.kclock
-        kdePackages.kcolorchooser pastel lf
-        powershell gnome-pomodoro
-        ferdium
-
-        # sddm displaymanager
-        kdePackages.sddm kdePackages.qtmultimedia
-        kdePackages.kirigami kdePackages.qtvirtualkeyboard
-        kdePackages.qt5compat kdePackages.qtsvg
-        sddm-astronaut
-
-        # just in case, if needed
-        wireshark termshark qbittorrent
-
         # containers and LLMs
         docker podman ollama
-    ];
+
+        # x11 packages
+        xinit xorg-server xinput xrandr
+
+        # extras
+        proton-vpn
+    ]);
 
     # system fonts
     fonts.packages = with pkgs; [

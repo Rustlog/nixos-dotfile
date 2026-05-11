@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ pkgs, unstable-pkgs, lib, ... }:
 
 {
     # programs modules
@@ -6,17 +6,27 @@
         sway = {
             enable = true; # sway WM
             extraOptions = [ "--unsupported-gpu" ];
+            package = unstable-pkgs.sway;
             extraSessionCommands = ''
                 export GTK_THEME=Breeze:dark
                 export QT_QPA_PLATFORMTHEME=qt6ct
                 export WLR_RENDERER=vulkan
             '';
         };
-        hyprland.enable = true; # hyprland WM
+        hyprland = {
+            enable = true; # hyprland WM
+            package = unstable-pkgs.hyprland;
+        };
 
-        git.enable = true;
-        bash.enable = true;
-        bash.completion.enable = true;
+        git = {
+            enable = true;
+            lfs.enable = true;
+            package = unstable-pkgs.git;
+        };
+        bash = {
+            enable = true;
+            completion.enable = true;
+        };
         zsh.enable = true;
         wireshark.enable = true;
         dconf.enable = true;
