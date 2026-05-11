@@ -20,7 +20,7 @@
                 inherit system;
                 config.allowUnfree = true;
             };
-            laptop = stable.lib.nixosSystem {
+            nixos = stable.lib.nixosSystem {
                 inherit system;
                 specialArgs = {
                     inherit hostname;
@@ -28,12 +28,12 @@
                     inherit unstable-pkgs;
                 };
                 modules = [
-                    ./hosts/laptop/configuration.nix
+                    ./hosts/nixos/configuration.nix
                 ];
             };
         in {
             nixosConfigurations = {
-                ${hostname} = laptop;
+                ${hostname} = nixos;
             };
         };
 }
