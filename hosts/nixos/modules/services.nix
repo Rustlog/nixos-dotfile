@@ -67,7 +67,6 @@
                 theme = "sddm-astronaut-theme";
                 extraPackages = with pkgs; [
                     kdePackages.qtmultimedia
-                    kdePackages.qtvirtualkeyboard
                     kdePackages.kirigami kdePackages.qtsvg
                     kdePackages.qt5compat sddm-astronaut
                 ];
@@ -79,6 +78,7 @@
         libinput.enable = true;
         xserver.enable = false;
         udisks2.enable = true;
+        cron.enable = true;
         openssh = {
             enable = true;
             settings = {
@@ -182,9 +182,8 @@
             };
             wantedBy = [ "multi-user.target" ];
         };
-        "docker" = {
-            wantedBy = lib.mkForce [];
-        };
+        "docker".wantedBy = lib.mkForce [];
+        "cron".wantedBy = lib.mkForce [];
     };
 }
 

@@ -37,7 +37,7 @@
         qemu_full steam-run
 
         # networking
-        networkmanager dig wirelesstools
+        dig wirelesstools
         sshfs nftables frp nmap net-tools
         networkmanagerapplet mtpfs simple-mtpfs
         nmon dnsmasq hostapd
@@ -60,13 +60,15 @@
         powershell gnome-pomodoro
         ferdium
 
+        # containers and LLMs
+        docker podman ollama
+
         # sddm displaymanager
         kdePackages.sddm kdePackages.qtmultimedia
-        kdePackages.kirigami kdePackages.qtvirtualkeyboard
-        kdePackages.qt5compat kdePackages.qtsvg
-        sddm-astronaut
+        kdePackages.kirigami kdePackages.qt5compat
+        kdePackages.qtsvg sddm-astronaut
 
-        # just in case, if needed
+        # just in case
         wireshark termshark qbittorrent
 
     ])
@@ -78,7 +80,8 @@
         postgresql sqlite gnumake deno
         gdb gdbgui valgrind traceroute
         stdman cppreference-doc python3
-        cppcheck go gh hyperfine
+        cppcheck go gh hyperfine mdcat
+        glow
 
         # wayland and session tools
         # sway & hyprland
@@ -105,8 +108,8 @@
         nginx-language-server
         pyright
 
-        # containers and LLMs
-        docker podman ollama
+        # Networking
+        nethogs bandwhich
 
         # x11 packages
         xinit xorg-server xinput xrandr

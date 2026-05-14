@@ -1,4 +1,4 @@
-{ pkgs, unstable-pkgs , ... }:
+{ pkgs, ... }:
 
 {
     imports = [
@@ -28,7 +28,7 @@
 
     nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
-    boot.kernelPackages = unstable-pkgs.linuxPackages_latest;
+    boot.kernelPackages = pkgs.linuxPackages_latest;
 
     system.stateVersion = "25.11";
 }
