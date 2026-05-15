@@ -31,14 +31,14 @@ function toggle_theme() {
         swaybg -o '*' -i "${background_img}" -m fill &>/dev/null &
     fi
 
+    ln -sf ../$NUM/config.jsonc "${current_waybar_config}"
+    ln -sf ../$NUM/style.css "${current_waybar_style}"
+
     if ! pgrep -f "waybar -c ${current_waybar_config} -s ${current_waybar_style}" &> /dev/null; then
         waybar -c "${current_waybar_config}" -s "${current_waybar_style}" &> /dev/null &
     fi
 
-    ln -sf ../$NUM/config.jsonc "${current_waybar_config}"
-    ln -sf ../$NUM/style.css "${current_waybar_style}"
-
-    sleep 0.08 && pkill -SIGUSR2 -f "waybar -c .* -s .*"
+    sleep 0.2 && pkill -SIGUSR2 -f "waybar -c .* -s .*"
 
     notify-send -t 1000 "${msg}" || true
 }
@@ -48,13 +48,12 @@ function main() {
 
     pgrep -f "bash .*${0}" | grep -v "^$$" | xargs -r kill &> /dev/null || true
 
-    for i in ${THEME_DIR}/[0-9]*; do
+    for i in "${THEME_DIR}"/[0-9]*; do
         TOTAL_AVAILABLE_THEMES=$((TOTAL_AVAILABLE_THEMES + 1))
     done
 
     if command -v "awww-daemon" &> /dev/null; then
-        FOUND_SWWW=1
-        pkill -f '.*awww-daemon'; awww-daemon &>/dev/null & disown
+        FOUND_SWWW=1; pkill -f '.*awww-daemon'; awww-daemon &>/dev/null & disown
     fi
 
     trap 'toggle_theme toggle_next_theme'     SIGUSR1

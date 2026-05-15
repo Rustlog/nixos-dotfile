@@ -133,9 +133,6 @@ bar {
     exec /usr/lib*/xdg-desktop-portal-wlr
     exec /usr/lib*/xdg-desktop-portal -r
 
-    # kdeconnect daemon
-    exec kdeconnectd
-
     # GTK Theme
     set $schema org.gnome.desktop.interface
     exec {
