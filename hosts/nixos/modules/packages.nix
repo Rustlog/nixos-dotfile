@@ -114,8 +114,9 @@
         # x11 packages
         xinit xorg-server xinput xrandr
 
-        # extras
+        # extras tools and utils
         proton-vpn
+        opustags
     ]);
 
     # system fonts

@@ -3,25 +3,37 @@
 {
     # users
     users.users = {
-        "self" = {
+        "rustlog" = {
             enable = true;
-            name = "self";
             uid = 1000;
-            description = "(admin)";
+            description = "Rustlog (rustlog)";
             isNormalUser = true;
             shell = pkgs.bashInteractive;
-            group = "self";
+            group = "rustlog";
             extraGroups = [
                 "wheel" "audio" "input" "disk" "kvm"
                 "kmem" "wireshark" "networkmanager"
                 "video" "storage" "root"
             ];
         };
+        "self" = {
+            enable = true;
+            name = "self";
+            uid = 1001;
+            description = "Self (admin)";
+            isNormalUser = true;
+            shell = pkgs.bashInteractive;
+            group = "self";
+            extraGroups = [
+                "wheel" "audio" "input" "disk"
+                "kvm" "kmem" "networkmanager"
+                "video" "storage" "root"
+            ];
+        };
         "guest" = {
             enable = true;
-            name = "guest";
-            uid = 1001;
-            description = "(guest)";
+            uid = 1002;
+            description = "Guest (guest)";
             isNormalUser = true;
             password = "guest";
             createHome = true;
@@ -31,16 +43,27 @@
                 "audio" "video"
             ];
         };
+        "dojo" = {
+            enable = true;
+            uid = 1003;
+            description = "Dojo (dojo)";
+            isNormalUser = true;
+            password = "dojo";
+            createHome = true;
+            shell = pkgs.bashInteractive;
+            group = "dojo";
+            extraGroups = [
+                "audio" "video"
+            ];
+        };
     };
 
     # groups
     users.groups = {
-        "self" = {
-            gid = 1000;
-        };
-        "guest" = {
-            gid = 1001;
-        };
+        "rustlog" = { gid = 1000; };
+        "self" = { gid = 1001; };
+        "guest" = { gid = 1002; };
+        "dojo" = { gid = 1003; };
     };
 }
 

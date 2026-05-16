@@ -67,6 +67,7 @@
     # kernel runtime parameters
     boot.kernel.sysctl = {
         "vm.swappiness" = 80;
+        "net.ipv6.mld_qrv" = 1;
     };
 
     # partition/logical-volume mounts ( for /etc/fstab )

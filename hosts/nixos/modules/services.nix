@@ -46,31 +46,31 @@
         };
         foot = {
             enable = true;
-            settings = (import ./foot.ini.nix);
+            settings = (import ./config/foot.ini.nix);
         };
     };
 
     # services module
     services = {
         displayManager = {
-            # ly.enable = true;
-            # ly.settings = {
-            #     animation = "colormix";
-            #     session_log = ".local/state/ly-session.log";
-            #     vi_mode = true; full_color = true;
-            #     clear_password = true;
-            # };
-            sddm = {
-                enable = true;
-                wayland.enable = true;
-                wayland.compositor = "weston";
-                theme = "sddm-astronaut-theme";
-                extraPackages = with pkgs; [
-                    kdePackages.qtmultimedia
-                    kdePackages.kirigami kdePackages.qtsvg
-                    kdePackages.qt5compat sddm-astronaut
-                ];
+            ly.enable = true;
+            ly.settings = {
+                animation = "none";
+                session_log = ".local/state/ly-session.log";
+                vi_mode = true; full_color = true;
+                clear_password = true;
             };
+            # sddm = {
+            #     enable = true;
+            #     wayland.enable = true;
+            #     wayland.compositor = "weston";
+            #     theme = "sddm-astronaut-theme";
+            #     extraPackages = with pkgs; [
+            #         kdePackages.qtmultimedia
+            #         kdePackages.kirigami kdePackages.qtsvg
+            #         kdePackages.qt5compat sddm-astronaut
+            #     ];
+            # };
         };
         power-profiles-daemon.enable = false;
         desktopManager.plasma6.enable = true; # KDE plasma6
@@ -90,6 +90,7 @@
         pipewire = {
             enable = true;
             alsa.enable = true;
+            alsa.support32Bit = true;
             pulse.enable = true;
         };
         logind = {
@@ -121,8 +122,13 @@
                 storage-driver = "overlay2";
             };
         };
-        podman = {
-            enable = false;
+        podman.enable = true;
+        containers.storage.settings = {
+            storage = {
+                driver = "overlay";
+                runroot = "/run/containers/storage/";
+                graphroot = "/shared/containers/podman_containers/storage/";
+            };
         };
     };
 
@@ -183,6 +189,7 @@
             wantedBy = [ "multi-user.target" ];
         };
         "docker".wantedBy = lib.mkForce [];
+        "podman".wantedBy = lib.mkForce [];
         "cron".wantedBy = lib.mkForce [];
     };
 }

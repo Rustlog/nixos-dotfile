@@ -20,11 +20,5 @@
             '';
         };
     };
-    environment.etc."containers/storage.conf".text = ''
-        [storage]
-        driver = "overlay"
-        graphroot = "/shared/containers/podman_containers/storage/"
-        runroot = "/run/containers/storage/"
-    '';
 }
 
