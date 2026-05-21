@@ -12,19 +12,9 @@
         ./modules/nix.nix
     ];
 
-    # XDG portals
-    xdg.portal = {
-        enable = true;
-        wlr.enable = true;
-    };
-
     # Locale
     time.timeZone = "Asia/Kolkata";
     i18n.defaultLocale = "en_US.UTF-8";
-
-    console.packages = with pkgs; [
-        terminus_font
-    ];
 
     nix.settings.experimental-features = [ "nix-command" "flakes" ];
 

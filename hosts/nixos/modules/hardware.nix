@@ -47,7 +47,7 @@
                 "sd_mod" "rtsx_pci_sdmmc"
             ];
             luks.devices = {
-                "cryptpart" = { # Encrypted luks partition
+                "CryptVG" = { # Encrypted luks partition
                     device = "/dev/disk/by-label/cryptpool-lvm";
                 };
             };

@@ -1,6 +1,9 @@
 { pkgs, unstable-pkgs, lib, ... }:
 
 {
+    # disable default services
+    services.geoclue2.enable = false;
+
     # programs modules
     programs = {
         sway = {
@@ -46,7 +49,7 @@
         };
         foot = {
             enable = true;
-            settings = (import ./config/foot.ini.nix);
+            settings = (import ./configs/foot.ini.nix);
         };
     };
 
@@ -57,8 +60,10 @@
             ly.settings = {
                 animation = "none";
                 session_log = ".local/state/ly-session.log";
-                vi_mode = true; full_color = true;
                 clear_password = true;
+                save = true;
+                vi_mode = true; full_color = true;
+                vi_default_mode = "insert";
             };
             # sddm = {
             #     enable = true;
@@ -112,6 +117,8 @@
 
     # rtkit for pipewire
     security.rtkit.enable = true;
+    # Policy Kit
+    security.polkit.enable = true;
 
     # docker settings
     virtualisation = {
@@ -132,7 +139,152 @@
         };
     };
 
-    # custom systemd services
+    # XDG portals
+    xdg.portal = {
+        enable = true;
+        wlr.enable = true;
+    };
+
+    # console font
+    console = {
+        earlySetup = true;
+        font = "ter-v24b";
+        packages = with pkgs; [
+            terminus_font
+        ];
+    };
+
+    # custom systemd user services
+    systemd.user.services = {
+        "polkit-kde" = {
+            description = "Polkit KDE Authentication Agent";
+            unitConfig = {
+                Requires = [ "graphical-session.target" ];
+                After = [ "graphical-session.target" ];
+                PartOf = [ "graphical-session.target" ];
+                bindsTo = [ "graphical-session.target" ];
+                StartLimitIntervalSec = 240;
+                StartLimitBurst = 240;
+            };
+            serviceConfig = {
+                ExecStart = "${pkgs.kdePackages.polkit-kde-agent-1}/libexec/polkit-kde-authentication-agent-1";
+                Restart = "always";
+                RestartSec = 1;
+            };
+            wantedBy = [ "graphical-session.target" ];
+        };
+        # "udiskie-tray" = {
+        #     description = "Udiskie System Tray";
+        #     unitConfig = {
+        #         Requires = [ "graphical-session.target" ];
+        #         After = [ "graphical-session.target" ];
+        #         PartOf = [ "graphical-session.target" ];
+        #         StartLimitIntervalSec = 240;
+        #         StartLimitBurst = 240;
+        #     };
+        #     serviceConfig = {
+        #         ExecCondition = "/bin/sh -c 'systemctl --user show-environment | grep -q -E \"(DISPLAY|WAYLAND_DISPLAY)\"'";
+        #         Environment = [
+        #             "GI_TYPELIB_PATH=${pkgs.gtk3}/lib/girepository-1.0:${pkgs.libappindicator-gtk3}/lib/girepository-1.0"
+        #         ];
+        #         ExecStart = "${pkgs.udiskie}/bin/udiskie" + " " + pkgs.lib.escapeShellArgs [
+        #             "--notify"
+        #             "--no-automount"
+        #             "--no-menu-checkbox-workaround"
+        #             "--no-menu-update-workaround"
+        #             "--no-password-cache"
+        #             "--appindicator"
+        #             "--file-manager" "${pkgs.kdePackages.dolphin}/bin/dolphin"
+        #             "--config" "/etc/udiskie/config.yaml"
+        #             "--tray"
+        #         ];
+        #         Restart = "always";
+        #         RestartSec = 1;
+        #     };
+        #     bindsTo = [ "graphical-session.target" ];
+        #     wantedBy = [ "graphical-session.target" ];
+        # };
+        # "easyeffects-tray" = {
+        #     description = "Easyeffects Audio Effects Daemon";
+        #     unitConfig = {
+        #         Requires = [ "graphical-session.target" ];
+        #         After = [ "graphical-session.target" ];
+        #         PartOf = [ "graphical-session.target" ];
+        #         bindsTo = [ "graphical-session.target" ];
+        #         StartLimitIntervalSec = 240;
+        #         StartLimitBurst = 240;
+        #     };
+        #     serviceConfig = {
+        #         ExecStart = "${pkgs.easyeffects}/bin/easyeffects --gapplication-service";
+        #         Restart = "always";
+        #         RestartSec = 1;
+        #     };
+        #     wantedBy = [ "graphical-session.target" ];
+        # };
+        # "nm-applet-tray" = {
+        #     description = "NetworkManager Applet";
+        #     unitConfig = {
+        #         Requires = [ "graphical-session.target" ];
+        #         After = [ "graphical-session.target" ];
+        #         PartOf = [ "graphical-session.target" ];
+        #         bindsTo = [ "graphical-session.target" ];
+        #         StartLimitIntervalSec = 240;
+        #         StartLimitBurst = 240;
+        #     };
+        #     serviceConfig = {
+        #         ExecStart = "${pkgs.networkmanagerapplet}/bin/nm-applet --indicator";
+        #         Restart = "always";
+        #         RestartSec = 1;
+        #     };
+        #     wantedBy = [ "graphical-session.target" ];
+        #
+        # };
+        # "mako-notification-daemon" = {
+        #     description = "Notification Daemon";
+        #     unitConfig = {
+        #         Requires = [ "graphical-session.target" ];
+        #         After = [ "graphical-session.target" ];
+        #         PartOf = [ "graphical-session.target" ];
+        #         bindsTo = [ "graphical-session.target" ];
+        #         StartLimitIntervalSec = 240;
+        #         StartLimitBurst = 240;
+        #     };
+        #     serviceConfig = {
+        #         ExecStart = "${pkgs.mako}/bin/mako" + " " + pkgs.lib.escapeShellArgs [
+        #             "--border-size=4"
+        #             "--border-radius=8"
+        #             "--background-color='#333333'"
+        #             "--default-timeout=4000"
+        #             "--max-visible=4"
+        #         ];
+        #         Restart = "on-failure";
+        #         RestartSec = 1;
+        #     };
+        #     wantedBy = [ "graphical-session.target" ];
+        #
+        # };
+        # "playerctld-daemon" = {
+        #     description = "Media Player Daemon";
+        #     unitConfig = {
+        #         Requires = [ "graphical-session.target" ];
+        #         After = [ "graphical-session.target" ];
+        #         PartOf = [ "graphical-session.target" ];
+        #         bindsTo = [ "graphical-session.target" ];
+        #         StartLimitIntervalSec = 240;
+        #         StartLimitBurst = 240;
+        #     };
+        #     serviceConfig = {
+        #         ExecStart = "${pkgs.playerctl}/bin/playerctld";
+        #         Restart = "on-failure";
+        #         RestartSec = 1;
+        #     };
+        #     wantedBy = [ "graphical-session.target" ];
+        #
+        # };
+    };
+    environment.etc."udiskie/config.yaml".source = (pkgs.formats.yaml {}).generate "config.yaml" (import ./configs/udiskie.yaml.nix);
+
+    # custom systemd system services
     systemd.services = {
         "nbfc-service" = {
             enable = true;
@@ -140,8 +292,8 @@
             documentation = [ "man:nbfc_service(1)" ];
             after = [ "network.target" ];
             unitConfig = {
-                StartLimitIntervalSec = 20;
-                StartLimitBurst = 5;
+                StartLimitIntervalSec = 240;
+                StartLimitBurst = 240;
             };
             serviceConfig = {
                 ExecStart = "${pkgs.nbfc-linux}/bin/nbfc_service --config-file /var/nbfc/nbfc.json";
@@ -155,36 +307,13 @@
             description = "ryzenprofile: ";
             documentation = [ "man:ryzenprofile(1)" ];
             unitConfig = {
-                StartLimitIntervalSec = 20;
-                StartLimitBurst = 5;
+                StartLimitIntervalSec = 240;
+                StartLimitBurst = 240;
             };
             serviceConfig = {
                 ExecStart = "/usr/local/bin/ryzenprofiled";
                 Restart = "always";
                 RestartSec = 1;
-            };
-            wantedBy = [ "multi-user.target" ];
-        };
-        "vtconsole_font" = {
-            enable = true;
-            description = "vtconsole font";
-            unitConfig = {
-                Requires = [ "systemd-vconsole-setup.service" ];
-                After = [ "systemd-vconsole-setup.service" ];
-                Before = [ "displayManager.service" ];
-            };
-            serviceConfig = {
-                ExecStart = ''
-                    /bin/sh -c \
-                        'CONFIG="/etc/vtconsole.conf" VTs="/dev/tty[0-9]" FONT="ter-v24b"; \
-                        [ -r "$''${CONFIG}" ] && . "$''${CONFIG}"; \
-                        for tty in $''${VTs}; do \
-                            [ -c "$''${tty}" ] || continue; \
-                            ${pkgs.kbd}/bin/setfont -C "$''${tty}" "$''${FONT}" || printf "%%s\n" "failed for $''${tty}"; \
-                        done'
-                '';
-                Type = "oneshot";
-                Restart = "no";
             };
             wantedBy = [ "multi-user.target" ];
         };

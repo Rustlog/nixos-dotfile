@@ -10,10 +10,10 @@
 
         # audio video and media stuff
         vlc feh imv inxi mpv mpvScripts.mpris obs-studio
-        alsa-lib alsa-utils alsa-tools alsa-firmware
+        alsa-lib alsa-utils alsa-tools alsa-firmware udiskie
         libao calf easyeffects pavucontrol lsp-plugins
         cava librewolf firefox-bin playerctl jellyfin
-        jellyfin-web mpd ncmpcpp
+        jellyfin-web mpd ncmpcpp pipewire wireplumber
         zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.default
         # DAWs
         lmms ardour hydrogen carla
@@ -22,19 +22,22 @@
         blender krita gimp inkscape
 
         # system tools
-        ryzenadj brightnessctl mesa
+        ryzenadj brightnessctl mesa gnutar zip
         exfatprogs e2fsprogs ntfs3g dosfstools
         vulkan-tools vulkan-loader vulkan-headers
         nbfc-linux grub2 qutebrowser glib lvm2 lsof
-        openssl gsettings-desktop-schemas
+        openssl lha gsettings-desktop-schemas
         powertop ffmpeg-full zbar wireguard-tools
         openvpn file libva libvdpau libvpx libopus
-        nvtopPackages.full curl wget pciutils groff
+        nvtopPackages.full aria2 curl wget pciutils
         gammastep jq most nix-tree nix-index man
         man-pages man-pages-posix gptfdisk gnupg
-        smartmontools bc psmisc
-        nginx apacheHttpd
+        smartmontools bc psmisc acl groff
         qemu_full steam-run
+        kdePackages.polkit-kde-agent-1
+
+        # servers and proxies
+        nginx apacheHttpd
 
         # networking
         dig wirelesstools
@@ -57,7 +60,7 @@
         kdePackages.okular kdePackages.qttools pomodoro
         kdePackages.kdeconnect-kde kdePackages.kclock
         kdePackages.kcolorchooser pastel lf
-        powershell gnome-pomodoro
+        powershell pcmanfm vifm-full
         ferdium
 
         # containers and LLMs
@@ -76,12 +79,12 @@
     (with unstable-pkgs; [
         # dev tools
         nasm gcc zig clang clang-tools
-        libllvm llvm-manpages nodejs
+        libllvm llvm-manpages nodejs sbcl
         postgresql sqlite gnumake deno
         gdb gdbgui valgrind traceroute
         stdman cppreference-doc python3
         cppcheck go gh hyperfine mdcat
-        glow
+        glow age
 
         # wayland and session tools
         # sway & hyprland
@@ -89,6 +92,7 @@
         mako wlrctl wlr-randr foot alacritty awww
         hypridle hyprlock colord waybar
         fuzzel wl-clipboard grim slurp wf-recorder
+        autotiling
 
         # essential tools
         bash-completion
