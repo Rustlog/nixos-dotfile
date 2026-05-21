@@ -214,6 +214,7 @@ function Alias_vars() {
     alias ls="lsd --color=always --git --icon=always --group-directories-first --classify"
     alias ll="lsd --long --color=always --git --icon=always --group-directories-first --classify --permission octal --total-size --sort=size"
     alias Lsblk="lsblk --paths -o+SIZE --fs"
+    alias lsblk-="lsblk -o+FSTYPE,LABEL"
     alias diff="diff --color=auto"
     alias grep="grep --color=auto"
     alias ip="ip --color=auto"
@@ -1457,42 +1458,27 @@ function ToggleDrivers() {
 
 ### Run with nvidia
 function Nvidia() {
-    local -a binary=("$1"); shift
+    local exe="${1}"; shift 1
     local -a args=("$@")
 
-    if [[ -z "${binary[*]}" ]]; then
-        log error "No binary to execute?"
-        return 1
+    [[ -n "$(which "${exe}" 2>/dev/null)" ]] && exe="$(which "${exe}")"
+    if ! [[ ( "${exe:0:1}" = "/" && -r "${exe}" ) || -x "./${exe}" ]]; then
+        log error "exe not executable or found '${exe}'"; return 1;
     fi
 
-    if ls -l "${binary[*]}" &> /dev/null; then
-        log info "Running from current directory: ./${binary[*]}"
-        binary=("./${binary[*]}")
-    elif command -v "${binary}" &> /dev/null; then
-        log info "Running from PATH: $(whereis -b "${binary[*]}" | cut -d' ' -f2 2> /dev/null)"
-        binary=("${binary[*]}")
-    else
-        log error "${binary[*]}; No such file or binary?"
-        return 1
-    fi
-
-    local vulkan_icd_path=${VK_ICD_FILENAMES:-/usr/share/vulkan/icd.d/nvidia_icd.json}
-    local vk_optimus_layer=${__VK_LAYER_NV_optimus:-NVIDIA_only}
-    local glx_vendor_name=${__GLX_VENDOR_LIBRARY_NAME:-nvidia}
-    local -i prime_render_offload=${__NV_PRIME_RENDER_OFFLOAD:-1}
-    local -i dxvk_hud_setting=${DXVK_HUD:-1}
-    local -i mangohud_enabled=${MANGOHUD:-1}
+    [[ -n "${exe}" ]] || \
+        { log error "no executable given"; return 1; }
 
     local -a environment_variables=(
-        VK_ICD_FILENAMES=${vulkan_icd_path}
-        __VK_LAYER_NV_optimus=${vk_optimus_layer}
-        __GLX_VENDOR_LIBRARY_NAME=${glx_vendor_name}
-        __NV_PRIME_RENDER_OFFLOAD=${prime_render_offload}
-        DXVK_HUD=${dxvk_hud_setting}
-        MANGOHUD=${mangohud_enabled}
+        "VK_ICD_FILENAMES=${VK_ICD_FILENAMES:-/usr/share/vulkan/icd.d/nvidia_icd.json}"
+        "__VK_LAYER_NV_optimus=${__VK_LAYER_NV_optimus:-NVIDIA_only}"
+        "__GLX_VENDOR_LIBRARY_NAME=${__GLX_VENDOR_LIBRARY_NAME:-nvidia}"
+        "__NV_PRIME_RENDER_OFFLOAD=${__NV_PRIME_RENDER_OFFLOAD:-1}"
+        "DXVK_HUD=${DXVK_HUD:-1}"
+        "MANGOHUD=${MANGOHUD:-1}"
     )
     # Run executable
-    env "${environment_variables[@]}" "${binary[*]}" "${args[@]}"
+    env "${environment_variables[@]}" "${exe}" "${args[@]}"
 }; alias nvrun="Nvidia"
 
 ### Lauch steam with Nvidia
@@ -1746,6 +1732,10 @@ function PrefixRename() {
 function RandomColors() {
     local format="$1"
     pastel random | pastel format "${format:-hex}"
+}
+
+function Cd() {
+    mkdir -p "${1}" && cd "${1}"
 }
 
 # yazi filemanager with auto cd

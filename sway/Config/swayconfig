@@ -89,15 +89,6 @@ bar {
     set $right l
 
 ### My Application launcher ###
-    set $menu_wofi wofi \
-        -W 40% -H 32% \
-        --gtk-dark \
-        --allow-images \
-        --allow-markup \
-        --hide-scroll \
-        --prompt="Search" \
-        --show drun
-
     set $menu_rofi rofi \
         -show-icons \
         -font Hack \
@@ -114,30 +105,51 @@ bar {
 
     # Start waybar
     exec ~/.config/sway/scripts/WaybarThemes 1
+
     # Notification deamon
     exec mako --border-size=4 --border-radius=8 \
-        --background-color='#333333' --default-timeout=6000 \
+        --background-color='#333333' --default-timeout=4000 \
         --max-visible=4
-    # Polkit agent for authorization
+
+    # Polkit agent for authorization ( FHS only )
     exec /usr/lib*/polkit-kde*
+
     # Autotiling
-    # exec autotiling
+    exec autotiling
+
     # Playerctl daemon
     exec playerctld
-    # Easyeffects
-    exec easyeffects --gapplication-service
+
     # NetworkManager indicator
     exec nm-applet --indicator
 
-    # XDG desktop fixes
+    # Easyeffects
+    exec sleep 0.8 && easyeffects --gapplication-service
+
+    # udiskie
+    exec udiskie --notify --no-automount \
+        --no-menu-checkbox-workaround \
+        --no-menu-update-workaround \
+        --no-password-cache --appindicator \
+        --file-manager dolphin \
+        --config /etc/udiskie/config.yaml \
+        --tray
+
+    # XDG desktop fixes ( FHS only )
     exec /usr/lib*/xdg-desktop-portal-wlr
     exec /usr/lib*/xdg-desktop-portal -r
+
+    # sway hook graphical-session.target
+    exec swaymsg -t subscribe '["shutdown"]'; sh -c ' \
+        systemctl --user stop graphical-session.target; \
+        pkill -f "nm-applet|easyeffects|playerctld|autotiling|mako|udiskie|swayidle"; \
+    '
 
     # GTK Theme
     set $schema org.gnome.desktop.interface
     exec {
         gsettings set $schema color-scheme          "prefer-dark"
-        gsettings set $schema gtk-theme             "breeze-dark"
+        gsettings set $schema gtk-theme             "Breeze-Dark"
         gsettings set $schema icon-theme            "breeze-dark"
         gsettings set $schema font-name             "Roboto Mono 11"
         gsettings set $schema font-antialiasing     "rgba"
@@ -185,9 +197,9 @@ bar {
         for_window [app_id="^(Floating|Float|solid_f|floating|float)$"] floating enable, move position center
     # Enable floating (don't tile when launched)
         for_window [app_id="^(com.rtosta.zapzap|org.pulseaudio.pavucontrol)$"] floating enable
-        for_window [app_id="^(.*Pomodoro.*|.*pomodoro.*)$"] floating enable
+        for_window [app_id="^(.*Pomodoro.*|.*pomodoro.*|.*udiskie.*)$"] floating enable
         for_window [app_id="^(nm-connection-editor|.*smile|.*obsproject.*)$"] floating enable
-        for_window [app_id="^(.*pavucontrol.*|.*easyeffects.*)$|waterfox*|vivaldi*"] floating enable
+        for_window [app_id="^(.*pavucontrol.*|.*easyeffects.*)$|.*waterfox.*|vivaldi*"] floating enable
         for_window [app_id="^(org.kde.dolphin|xdg-desktop-portal.*|.*systemmonitor)$"] floating enable
         for_window [app_id="^(blueman-manager|.*konsole|.*elisa)$"] floating enable
         for_window [app_id="^(.*okular|.*qutebrowser|.*kclock$)$"] floating enable
@@ -461,8 +473,6 @@ bar {
         # Lauch application launcher
             bindsym Alt+Space exec env PATH="${PATH}:/bin:/sbin:/usr/bin:/usr/local/bin" $fuzzel
             bindsym Alt+Shift+Space exec $menu_rofi
-        # Lauch fuzzel
-            bindsym $MOD+D exec $menu_wofi
 
     #* Kill the focused windows *#
         bindsym $MOD+Q kill

@@ -33,8 +33,9 @@ function main() {
         return 0
     }
 
-    pgrep -f autotiling &>/dev/null || \
-        { autotiling &>/dev/null & autotiling_pid="$!"; sleep 0.1; }
+    pgrep -f "autotiling*" &>/dev/null || \
+        { autotiling &>/dev/null & \
+            autotiling_pid="$!"; sleep 0.1; }
 
     SPAWN_CAVA_INSTANCES
     [[ "$autotiling_pid" -ne 0 ]] && kill "$autotiling_pid"
