@@ -45,6 +45,8 @@ method = raw
 raw_target = ${pipe}
 data_format = ascii
 ascii_max_range = $((${#bar} - 1))
+channels = mono
+mono_option = average
 
 [smoothing]
 noise_reduction = $noise_level
@@ -69,7 +71,7 @@ EOF
 }
 
 # clean when exiting
-function CleanUP() {
+function HandleInterrupt() {
     local pipe="${1:-""}"
     local config="${2:-""}"
     local -n ref_pids=${3}
@@ -97,8 +99,8 @@ function SetBar() {
     local -i bar_len=${6:-4}
 
     case ${use_bar_num} in
-        1) bar_ref="▁▂▃▄▅▆▇█"; noise_level_ref=40 ;;
-        2) bar_ref="░░▒▒▓▓██"; noise_level_ref=88 ;;
+        1) bar_ref="▁▂▃▄▅▆▇█"; noise_level_ref=35 ;;
+        2) bar_ref="░░▒▒▓▓██"; noise_level_ref=80 ;;
         3) bar_ref="⣀⣄⣆⣇⣧⣷⣿"; noise_level_ref=70 ;;
         4) bar_ref="┳┻┳┻┳┻┳┻"; noise_level_ref=50 ;;
     esac
@@ -214,15 +216,14 @@ function main() {
     (sleep 0.8 && rm -f "${config_file}")
 
     # when your are done just clean the mess
-    trap "CleanUP ${pipe} ${config_file} pids; exit" EXIT SIGINT SIGTERM
+    trap "HandleInterrupt ${pipe} ${config_file} pids; exit" EXIT SIGINT SIGTERM
     # trap SIGUSR1 to toggle next bar
     trap 'ToggleBar bar idle_cava_bar noise_level dict use_bar_num config_file pipe bar_len framerate' SIGUSR1
 
     ## read stdout from cava, transform output, and check for activity
     local visualizer_output=""
     while read -r line < "${pipe}" || true; do
-        visualizer_output=$(printf '%s\n' "${line}" | sed -u "${dict}")
-        state=active
+        visualizer_output=$(printf '%s\n' "${line}" | sed -u "${dict}") state=active
         [[ "${visualizer_output}" == "${idle_cava_bar}" ]] && state=inactive
         printf '%s\n' "{\"text\":\"${visualizer_output}\",\"class\":\"${state}\"}"
     done

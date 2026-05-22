@@ -47,16 +47,6 @@
         "custom/power",
     ],
 
-    // NowPlaying prints json output
-    "custom/now_playing": {
-        "exec": "$(find ~/.config/sway/ -type f -name NowPlaying) 2>/dev/null",
-        "max-length": 60,
-        "return-type": "json",
-        "tooltip-format": "{text}",
-        "format": " {}"
-
-    },
-
     // Now playing
     "mpris": {
         "dynamic-order": ["title", "artist", "album"],
