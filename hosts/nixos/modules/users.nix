@@ -56,6 +56,20 @@
                 "audio" "video"
             ];
         };
+        "win10" = {
+            enable = true;
+            uid = 1004;
+            description = "win10 (win10)";
+            isNormalUser = true;
+            password = "win10";
+            createHome = true;
+            home = "/var/lib/qemu-vm/home/";
+            shell = "${pkgs.dash}/bin/dash";
+            group = "win10";
+            extraGroups = [
+                "audio" "video" "kvm" "storage" "render"
+            ];
+        };
     };
 
     # groups
@@ -64,6 +78,7 @@
         "self" = { gid = 1001; };
         "guest" = { gid = 1002; };
         "dojo" = { gid = 1003; };
+        "win10" = { gid = 1004; };
     };
 }
 

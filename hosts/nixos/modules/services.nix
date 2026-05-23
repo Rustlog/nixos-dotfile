@@ -1,6 +1,69 @@
 { pkgs, unstable-pkgs, lib, ... }:
+let
+    win10_package = (
+    let
+        pkg_name = "win10-qemu";
+        win10_launcherScript_name = "win10_launcher";
+        weston_config = (pkgs.formats.ini {}).generate "weston_config" {
+            libinput = {
+                enable-tap = true;
+                accel-profile= "adaptive";
+                accel-speed= "0.4";
+                natural-scroll = true;
+                scroll-method = "two-finger";
+            };
+            keyboard = {
+                repeat-rate = 60;
+                repeat-delay = 240;
+                keymap_layout = "us";
+                numlock-on = true;
+                vt-switching = true;
+            };
+        };
+        win10_launcherScript = pkgs.writeScriptBin "${win10_launcherScript_name}" ''
+        #!${pkgs.bash}/bin/bash
 
-{
+        RAM="$(${pkgs.gawk}/bin/awk '/MemTotal/ { mem = $2/(1024) } END { printf "%dM\n", mem/2 }' /proc/meminfo)"
+        RAM="''${RAM:-4G}"
+        VCPUS="$(($(nproc)/2))"
+        VCPUS="''${VCPUS:-4}"
+
+        exec ${pkgs.weston}/bin/weston \
+                --shell=kiosk-shell.so \
+                --backend=drm \
+                --xwayland \
+                --config=${weston_config} -- \
+        ${pkgs.qemu_full}/bin/qemu-system-x86_64 \
+            -enable-kvm \
+            -m "''${RAM}" \
+            -cpu EPYC,vendor=AuthenticAMD,kvm=on \
+            -smp cpus="''${VCPUS}",sockets=1 \
+            -display gtk,gl=on,zoom-to-fit=on,show-menubar=off \
+            -device virtio-gpu-gl-pci,max_outputs=1 \
+            -netdev user,id=nat0 \
+            -device virtio-net-pci,netdev=nat0 \
+            -audiodev pipewire,id=snd0,out.latency=20000 \
+            -device ich9-intel-hda -device hda-output,audiodev=snd0 \
+            -usb -device usb-tablet \
+            -drive file=/var/lib/qemu-vm/win10.qcow2,format=qcow2,if=virtio,media=disk
+        '';
+        win10_desktop = pkgs.writeTextDir "share/wayland-sessions/${pkg_name}.desktop" ''
+            [Desktop Entry]
+            Name=Win 10
+            Comment=Boot into Win10
+            Exec=${win10_launcherScript}/bin/${win10_launcherScript_name}
+            Type=Application
+        '';
+    in
+    pkgs.symlinkJoin {
+        name = pkg_name;
+        paths = [ win10_launcherScript win10_desktop ];
+    }).overrideAttrs (old: {
+        passthru = (old.passthru or {}) // {
+            providedSessions = [ old.name ];
+        };
+    });
+in {
     # disable default services
     services.geoclue2.enable = false;
 
@@ -53,6 +116,8 @@
         };
     };
 
+    environment.systemPackages = [ win10_package ];
+
     # services module
     services = {
         displayManager = {
@@ -76,6 +141,9 @@
             #         kdePackages.qt5compat sddm-astronaut
             #     ];
             # };
+            sessionPackages = [
+                win10_package
+            ];
         };
         power-profiles-daemon.enable = false;
         desktopManager.plasma6.enable = true; # KDE plasma6

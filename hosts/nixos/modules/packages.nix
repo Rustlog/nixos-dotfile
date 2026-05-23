@@ -33,7 +33,7 @@
         gammastep jq most nix-tree nix-index man
         man-pages man-pages-posix gptfdisk gnupg
         smartmontools bc psmisc acl groff
-        qemu_full steam-run
+        qemu_full cage weston steam-run dash
         kdePackages.polkit-kde-agent-1
 
         # servers and proxies
@@ -88,7 +88,7 @@
 
         # wayland and session tools
         # sway & hyprland
-        swayidle hyprlock swaylock swayimg cage
+        swayidle hyprlock swaylock swayimg
         mako wlrctl wlr-randr foot alacritty awww
         hypridle hyprlock colord waybar
         fuzzel wl-clipboard grim slurp wf-recorder
