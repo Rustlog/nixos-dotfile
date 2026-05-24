@@ -2,13 +2,12 @@
 let
     win10_package = (
     let
-        pkg_name = "win10-qemu";
-        win10_launcherScript_name = "win10_launcher";
+        pkg_name = "win10";
         weston_config = (pkgs.formats.ini {}).generate "weston_config" {
             libinput = {
                 enable-tap = true;
                 accel-profile= "adaptive";
-                accel-speed= "0.4";
+                accel-speed= "0.6";
                 natural-scroll = true;
                 scroll-method = "two-finger";
             };
@@ -20,7 +19,7 @@ let
                 vt-switching = true;
             };
         };
-        win10_launcherScript = pkgs.writeScriptBin "${win10_launcherScript_name}" ''
+        win10_launcher = pkgs.writeScriptBin "${pkg_name}" ''
         #!${pkgs.bash}/bin/bash
 
         RAM="$(${pkgs.gawk}/bin/awk '/MemTotal/ { mem = $2/(1024) } END { printf "%dM\n", mem/2 }' /proc/meminfo)"
@@ -51,13 +50,13 @@ let
             [Desktop Entry]
             Name=Win 10
             Comment=Boot into Win10
-            Exec=${win10_launcherScript}/bin/${win10_launcherScript_name}
+            Exec=${win10_launcher}/bin/${pkg_name}
             Type=Application
         '';
     in
     pkgs.symlinkJoin {
         name = pkg_name;
-        paths = [ win10_launcherScript win10_desktop ];
+        paths = [ win10_launcher win10_desktop ];
     }).overrideAttrs (old: {
         passthru = (old.passthru or {}) // {
             providedSessions = [ old.name ];
