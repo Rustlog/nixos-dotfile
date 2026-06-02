@@ -178,7 +178,7 @@ function ApplyShellTheme() {
     fi
 }
 
-function Export_vars() {
+function SetAndExportVars() {
     ### Global variables
     local schema_path
     HOSTNAME="${HOSTNAME:-$(cat /etc/hostname)}"
@@ -190,6 +190,7 @@ function Export_vars() {
     BREW="/home/linuxbrew/.linuxbrew"
     MEDIA="/run/media/$USER"
     VJOURNAL_DIR="${HOME}/dev/journals"
+    TODAY="$(date +%F)"
     MUSIC_DIR="${HOME}/media/music"
     XDG_DATA_HOME="$HOME/.local/share"
     HOME="${HOME:-$(printf ~)}"
@@ -209,9 +210,9 @@ function Export_vars() {
 function Alias_vars() {
     # ls/directory-listing commands alias
     alias lll="eza --color=always --icons=always --group --header --classify=always --octal-permissions --binary --across --sort=size --numeric --total-size --long"
-    alias l="eza --color=always --icons=always --group --header --classify=always --octal-permissions --binary --across --sort=created --reverse --long"
+    alias l="eza --color=always --icons=always --group --header --classify=always --octal-permissions --binary --across --sort=created --long"
     alias eza="eza --color=always --icons=always --group --header --classify=always --octal-permissions --binary --across --sort=size"
-    alias ls="lsd --color=always --git --icon=always --group-directories-first --classify"
+    alias ls="lsd --color=always --git --icon=always --group-directories-first --classify --reverse --sort=time"
     alias ll="lsd --long --color=always --git --icon=always --group-directories-first --classify --permission octal --total-size --sort=size"
     alias Lsblk="lsblk --paths -o+SIZE --fs"
     alias lsblk-="lsblk -o+FSTYPE,LABEL"
@@ -266,6 +267,7 @@ function Alias_vars() {
     alias ttyper_H="ttyper --words 20 --language english-advanced"
     alias mpv="env VK_ICD_FILENAMES=\$(printf /usr/share/vulkan/icd.d/*radeon*x86_64.json) mpv --volume=44 --vid=auto --audio-device=pulse"
     alias editor="\$EDITOR"
+    alias edit="\$EDITOR"
     alias EDITOR="\$EDITOR"
     alias gdbgui="gdbgui --no-browser"
     alias "clang++"="clang++ -fdiagnostics-color=always"
@@ -939,7 +941,7 @@ function netdisk() {
     local iface="${1:-$(ip route | grep default | cut -d' ' -f5)}"
     local dev="${2:-nvme0n1}"
     local interval="${3:-1}"
-    local iterations="${4:-1}"
+    local should_loop="${4:-0}"
     local rx tx prev_rx prev_tx rd wr
 
     local rx_path="/sys/class/net/$iface/statistics/rx_bytes"
@@ -977,7 +979,7 @@ function netdisk() {
     }
 
     # one-shot totals
-    if (( iterations == 1 )); then
+    if (( should_loop == 0 )); then
         rx=$(<"$rx_path") tx=$(<"$tx_path")
         read -r rd wr < <(get_disk_bytes)
 
@@ -1020,7 +1022,7 @@ function netdisk() {
             "$(human $dwr)"
 
         prev_rx=$rx prev_tx=$tx prev_rd=$rd prev_wr=$wr
-        (( iterations > 0 )) && (( --iterations == 0 )) && break
+        (( should_loop > 0 )) && (( --should_loop == 0 )) && break
     done
     unset -f get_disk_bytes human
 }
@@ -1735,15 +1737,54 @@ function RandomColors() {
 }
 
 function Cd() {
-    mkdir -p "${1}" && cd "${1}"
+    local dir="${1}"
+    if mkdir -p "${dir}"; then
+        cd -- "${dir}" || \
+            { log error "cannot chdir '${dir}'"; return 1; }
+    else
+        log error "failed to mkdir '${dir}'"
+    fi
+}
+
+function log-today() {
+    local current_dir="" central_log_dir="" log_file="" \
+        current_time_24_fmt="" current_time_12_fmt="" header_string="" \
+        editor="${EDITOR:-vim}"
+    central_log_dir="$HOME/notes/logs"
+    if [[ -d "${central_log_dir}" ]] || \
+            mkdir -p "${central_log_dir}"; then
+        cd -- "${central_log_dir}" || \
+        { log error "failed to chdir '${central_log_dir}'"; return 1; }
+    else
+        log error "directory doesn't exist or failed to create '${central_log_dir}'"
+        return 1
+    fi
+    current_time_24_fmt="$(date +%T)"
+    current_time_12_fmt="$(date +"%I:%M:%S %p")"
+    log_file="${TODAY:-$(date +%F)}"
+    header_string="# Date: $log_file, created $current_time_24_fmt ($current_time_12_fmt)\n\n\n# vim: sts=4 sw=4 ft=vdf et:\n"
+
+    current_dir="$(readlink -f .)"
+    dir_tail="${current_dir##*/}"
+    if [[ "${dir_tail}" =~ (log|logs) ]]; then
+        [[ ! -s "${log_file}" ]] && \
+            printf '%b\n' "${header_string}" >> "${log_file}"
+        "${editor}" "${log_file}"
+        cd - &>/dev/null || \
+        { log error "failed to chdir OLDPWD"; return 1; }
+    else
+        log error "current directly is not named log/logs"
+    fi
 }
 
 # yazi filemanager with auto cd
 function y() {
-    local tmp=""
+    local tmp="" dir=""
     tmp="$(mktemp)"
     env TMPDIR="/run/user/$UID/tmp/" yazi "${@}" --cwd-file="${tmp}"
-    builtin cd -- "$(<"${tmp}")"
+    dir="$(<"${tmp}")"
+    builtin cd -- "${dir}" || \
+        { log error "cannot chdir '${dir}'"; return 1; }
     rm -f "${tmp}"
 }; alias yc="clear; y"
 
@@ -1766,7 +1807,7 @@ function SSH_Agent() {
 
 function main() {
     # ApplyShellTheme
-    Export_vars
+    SetAndExportVars
     SetPath
     Bash_and_ZSH_setup
     SetLocale

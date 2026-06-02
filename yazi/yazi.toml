@@ -47,3 +47,6 @@ rules = [
     { name = "*", use = [ "xdg_open", "reveal" ] },
 ]
 
+[manager]
+sort_by = "created"
+

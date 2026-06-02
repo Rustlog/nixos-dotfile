@@ -232,19 +232,19 @@ bar {
 
     #* Rotate Display clockwise *
         bindsym $MOD+Tab exec sh -c ' \
-                CURRENT_TRANSFORM="$(swaymsg --raw --type get_outputs | jq -r \".[].transform\")"; \
-                [ "${CURRENT_TRANSFORM}" = "normal" ] && CURRENT_TRANSFORM=0; \
-                { [ "${CURRENT_TRANSFORM}" = "270" ] && CURRENT_TRANSFORM=0; } || \
-                    CURRENT_TRANSFORM=$(( CURRENT_TRANSFORM + 90 )); \
-                swaymsg output "*" transform "${CURRENT_TRANSFORM}" \
+                CURRENT_VALUE="$(swaymsg --raw --type get_outputs | jq -r \".[].transform\")"; \
+                [ "${CURRENT_VALUE}" = "normal" ] && CURRENT_VALUE=0; \
+                { [ "${CURRENT_VALUE}" = "270" ] && CURRENT_VALUE=0; } || \
+                    CURRENT_VALUE=$(( CURRENT_VALUE + 90 )); \
+                swaymsg output "*" transform "${CURRENT_VALUE}" \
         '
     #* Rotate Display counter-clockwise *
         bindsym $MOD+Shift+Tab exec sh -c ' \
-                CURRENT_TRANSFORM="$(swaymsg --raw --type get_outputs | jq -r \".[].transform\")"; \
-                [ "${CURRENT_TRANSFORM}" = "normal" ] && CURRENT_TRANSFORM=0; \
-                { [ "${CURRENT_TRANSFORM}" = "0" ] && CURRENT_TRANSFORM=270; } || \
-                    CURRENT_TRANSFORM=$(( CURRENT_TRANSFORM - 90 )); \
-                swaymsg output "*" transform "${CURRENT_TRANSFORM}" \
+                CURRENT_VALUE="$(swaymsg --raw --type get_outputs | jq -r \".[].transform\")"; \
+                [ "${CURRENT_VALUE}" = "normal" ] && CURRENT_VALUE=0; \
+                { [ "${CURRENT_VALUE}" = "0" ] && CURRENT_VALUE=270; } || \
+                    CURRENT_VALUE=$(( CURRENT_VALUE - 90 )); \
+                swaymsg output "*" transform "${CURRENT_VALUE}" \
         '
     #* Reset Display to default view (horizontal) *
         bindsym $MOD+0 exec swaymsg output '*' transform 0
