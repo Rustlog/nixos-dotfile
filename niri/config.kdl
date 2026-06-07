@@ -1,10 +1,20 @@
+// Niri WM config
+// Author: Rustlog 2026
+
+// startup commands and scripts
 spawn-sh-at-startup "~/.config/niri/scripts/WaybarThemes 1"
 spawn-at-startup "playerctld"
 spawn-at-startup "nm-applet" "--indicator"
 spawn-sh-at-startup "sleep 0.4 && easyeffects --gapplication-service"
+spawn-sh-at-startup r##"
+            swayidle -w \
+            timeout 100 "~/.config/niri/lock_screen/lock.sh" \
+            resume "niri msg output "$(niri msg --json outputs | jq -r '.[].name' | tail -n1 )" on" \
+            before-sleep "~/.config/niri/lock_screen/lock.sh set_bg"
+        "##
 spawn-at-startup "mako" "--border-size=4" "--border-radius=8" \
-            "--background-color=#333333" "--default-timeout=4000" \
-            "--max-visible=4"
+        "--background-color=#333333" "--default-timeout=4000" \
+        "--max-visible=4"
 spawn-at-startup "udiskie" "--notify" "--no-automount" \
         "--no-menu-checkbox-workaround" \
         "--no-menu-update-workaround" \
@@ -13,12 +23,14 @@ spawn-at-startup "udiskie" "--notify" "--no-automount" \
         "--config" "/etc/udiskie/config.yaml" \
         "--tray"
 
+// environment variables
 environment {
     QT_QPA_PLATFORM         "wayland"
     QT_QPA_PLATFORMTHEME    "qt6ct"
     GTK_THEME               "Breeze:dark"
 }
 
+// cursor
 cursor {
     xcursor-theme "breeze_cursors"
     xcursor-size 24
@@ -26,10 +38,11 @@ cursor {
     hide-after-inactive-ms 4000
 }
 
+// input devices
 input {
     keyboard {
         xkb { layout "us,es,ru"; }
-        repeat-delay 216
+        repeat-delay 240
         repeat-rate 60
         numlock // enable numlock
     }
@@ -55,6 +68,7 @@ input {
     warp-mouse-to-focus
 }
 
+// window layout and other stuff
 layout {
     gaps 8
     center-focused-column "on-overflow"
@@ -78,13 +92,9 @@ layout {
 }
 
 overview {
-    // zoom 0.6
-    // backdrop-color "#44444400"
     zoom 0.34
     backdrop-color "#262626"
-
     workspace-shadow {
-        // off
         softness 40
         spread 10
         offset x=0 y=10
@@ -478,7 +488,6 @@ window-rule {
 
 // animation
 animations {
-    on
     slowdown 0.6
 }
 

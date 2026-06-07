@@ -4,7 +4,7 @@
 
 /* Predefined colors */
 @define-color bg_main            rgba(43, 48, 59, 0.8);
-@define-color text_main          #FFFFFF;                 /* Default text in waybar */
+@define-color text_main          #DDDDDD;                 /* Default text in waybar */
 @define-color text_dim           #888888;                 /* Inactive/dim text (separators) */
 @define-color accent_purple      #8810DD;                 /* Hover accents */
 @define-color focused_shadow     rgba(33, 33, 33, 0.4);                 /* Focused borders */
@@ -36,8 +36,6 @@
 @define-color temperature_critical #FF0000;
 @define-color tray_attention     #EB4D4B;
 @define-color language_fg        #ffffd0;
-@define-color scratchpad_fg      #FFAAFF;
-@define-color scratchpad_bg      rgba(0, 0, 0, 0.6);
 @define-color privacy_screenshare #CF5700;
 @define-color privacy_audio_in   #1CA000;
 @define-color privacy_audio_out  #0069D4;
@@ -64,7 +62,7 @@
 
 /* Common module styling with border-bottom */
 #language, #clock, #cpu, #memory, #temperature, #battery,
-#network, #pulseaudio, #backlight, #disk, #idle_inhibitor, #tray {
+#network, #pulseaudio, #backlight, #disk, #window, #tray {
     padding: 0px 6px;
     margin: 0px 2px;
     border-top: 0px solid transparent;
@@ -368,26 +366,20 @@ menuitem:disabled {
 #privacy-item.audio-out   { background-color: @privacy_audio_out; }
 
 /* ==================================================== */
-/* Misc modules (idle, language, keyboard, scratchpad)  */
+/* Misc modules (idle, language, keyboard)  */
 /* ==================================================== */
-
-#idle_inhibitor { background-color: #2D3436; }
-#idle_inhibitor.activated {
-    background-color: #ECF0F1;
-    color: #2D3436;
-}
 
 #language {
     color: @language_fg;
     font-weight: bolder;
-    padding: 0px 8px;
-    min-width: 18px;
-    margin: 4px;
+    padding: 0px 4px;
+    min-width: 16px;
+    margin: 2px;
 }
 
 #keyboard-state {
     color: @clock_fg;
-    margin: 4px;
+    margin: 2px;
     border-radius: 8%;
 }
 
@@ -401,14 +393,12 @@ menuitem:disabled {
     background: rgba(0, 0, 0, 0.2);
 }
 
-#scratchpad {
-    color: @scratchpad_fg;
-    background: @scratchpad_bg;
-}
-
-#scratchpad.empty {
-    color: @scratchpad_fg;
-    background: @scratchpad_bg;
+#window {
+    color: @text_main;           /* Soft white text color */
+    background-color: transparent; /* Dark background color */
+    padding: 0px 10px;
+    border-radius: 8px;
+    font-weight: bold;
 }
 
 #mpris.playing {

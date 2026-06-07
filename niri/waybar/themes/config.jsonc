@@ -25,7 +25,7 @@
         "mpris"
     ],
     "modules-center": [
-        "sway/workspaces",
+        "niri/window",
     ],
     "modules-right": [
         "pulseaudio",
@@ -36,7 +36,7 @@
         // "custom/seperator",
         // "keyboard-state",
         "custom/seperator",
-        "sway/language",
+        "niri/language",
         "custom/seperator",
         "battery",
         "custom/seperator",
@@ -65,7 +65,7 @@
 
     // Cava on the top
     "custom/cava": {
-        "exec": "$(find ~/.config/sway/ -type f -name WaybarCava) 0 74 10 2>/dev/null",
+        "exec": "$(find ~/.config/niri/ -type f -name WaybarCava) 0 74 10 2>/dev/null",
         "on-click": "pkill -SIGUSR1 -f '.*scripts/WaybarCava 0 74 10'",
         "return-type": "json",
         "format": "{}"
@@ -85,12 +85,16 @@
         "tooltip": false
     },
 
-    "sway/language": {
+    "niri/language": {
         "format": "{}",
-        "on-click": "swaymsg input type:keyboard xkb_switch_layout next"
+        "on-click": "niri msg action switch-layout next"
     },
-
-    "sway/workspaces": {
+    "niri/window": {
+        "format": "{app_id}",
+        "max-length": 40,
+        "separate-outputs": true
+    },
+    "niri/workspaces": {
         "disable-scroll": true,
         "disable-click": true,
         "warp-on-scroll": false,
@@ -269,8 +273,8 @@
         "format" : "   ",
         "tooltip": false,
         "menu": "on-click",
-        "on-click-right": "swaymsg reload",
-        "menu-file": "~/.config/sway/scripts/power_menu.xml",
+        "on-click-right": "niri msg action load-config-file",
+        "menu-file": "~/.config/niri/scripts/power_menu.xml",
         "menu-actions": {
             "shutdown": "systemctl poweroff --now || loginctl poweroff",
             "reboot": "systemctl reboot --now || loginctl reboot",

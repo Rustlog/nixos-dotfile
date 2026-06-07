@@ -116,7 +116,7 @@ window#waybar {
 
 /* Common module styling with border-bottom */
 #language, #clock, #cpu, #memory, #temperature, #battery,
-#network, #pulseaudio, #backlight, #disk, #idle_inhibitor, #tray {
+#network, #pulseaudio, #backlight, #disk, #tray {
     padding: 0px 8px;
     margin: 0px 2px;
     border-bottom: 3px solid transparent;
@@ -151,13 +151,6 @@ window#waybar {
 /* Custom modules */
 
 #custom-seperator { color: @text_dim; }
-
-#custom-now_playing.inactive { color: transparent; }
-
-#custom-now_playing.active {
-    color: @now_playing_active;
-    min-width: 10px;
-}
 
 #custom-cava.active {
     color: @cava_purple;
@@ -264,16 +257,6 @@ window#waybar {
     border-bottom-color: @disk-color;
 }
 
-#idle_inhibitor {
-    color: @idle-inhibitor-color;
-    border-bottom-color: transparent;
-}
-
-#idle_inhibitor.activated {
-    color: @idle-inhibitor-active-color;
-    border-bottom-color: @idle-inhibitor-active-color;
-}
-
 #tray {
     background-color: transparent;
     padding: 0 10px;
@@ -288,5 +271,15 @@ window#waybar {
     -gtk-icon-effect: highlight;
     color: @red;
     border-bottom-color: @red;
+}
+
+#mpris.playing {
+    color: @now_playing_active;
+    min-width: 10px;
+}
+
+#mpris.paused {
+    color: transparent;
+    background: transparent;
 }
 
