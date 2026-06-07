@@ -1,0 +1,73 @@
+#!/bin/sh
+
+log() {
+    printf '[%s]: %b\n' "${1:-}" "${2:-}"
+}
+
+require_var() {
+    [ -n "${1:-}" ] && return 0
+    return 1
+}
+
+main() {
+    pseudo_fstypes="" root_fs="" fs_label=""
+    v_dump=""
+
+    while [ "${#@}" -ne 0 ]; do
+        arg="${1:-}"
+        case "${arg}" in
+            -U|--uuid|--UUID) fs_label="use_uuid" ;;
+            -L|--label|--LABEL) fs_label="use_label" ;;
+            *) root_fs="${arg}" ;;
+        esac
+        shift
+    done
+
+    require_var "${root_fs}" || \
+        { log error "root not given, exiting"; return 1; }
+    mountpoint -q "${root_fs}" || \
+        { log error "given root '${root_fs}' is not mounted, exiting"; return 1; }
+
+    pseudo_fstypes="$(findmnt --pseudo -no FSTYPE | sort -u)"
+
+    findmnt -RnP --nofsroot -o"SOURCE,TARGET,FSTYPE,OPTIONS" "${root_fs}" |
+        while IFS=' ' read -r v_src v_target v_fstype v_options; do
+
+        v_src="${v_src#SOURCE=\"}";         v_src="${v_src%\"}"
+        v_target="${v_target#TARGET=\"}";   v_target="${v_target%\"}"
+        v_fstype="${v_fstype#FSTYPE=\"}";   v_fstype="${v_fstype%\"}"
+        v_options="${v_options#OPTIONS=\"}";v_options="${v_options%\"}"
+
+        case "${v_target}" in
+            /run|/sys|/dev|/proc|/run) continue ;;
+        esac
+
+        case "${v_options}" in
+            rw,relatime)                v_options="rw"                      ;;
+            rw,nosuid,nodev,relatime)   v_options="defaults,nosuid,nodev"   ;;
+            rw,nosuid,nodev,relatime,uid=*,gid=*,fmask=*,dmask=*,iocharset=*,errors=remount-ro|\
+                rw,relatime,fmask=*,*iocharset=*,errors=remount-ro)
+                v_options="rw,errors=remount-ro" ;;
+            *) ;;
+        esac
+
+        if printf '%s\n' "${v_fstype}" | grep -qxw "${pseudo_fstypes}"; then
+            if ! ( [ "${v_target}" = "/tmp" ] || [ "${v_fstype}" = "swap" ] ); then
+                continue
+            fi
+        fi
+
+        case "${v_target}" in
+            "${root_fs}") v_dump="0 1" ;;
+            *) { printf '%s\n' "${v_fstype}" | grep -qxw "${pseudo_fstypes}" && v_dump="0 0"; } || \
+                    v_dump="0 2" 
+                ;;
+        esac
+        printf '%-40s %-30s %-10s %-10s %-4s\n' \
+            "${v_src}" "${v_target}" "${v_fstype}" "${v_options}" "${v_dump}"
+    done
+
+}
+
+main "${@}"
+

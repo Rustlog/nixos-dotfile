@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+CHROOT_TARGET_DIR=""
+
+function log() {
+    printf '[%s]: %s\n' "${1}" "${2}"
+}
+
+function umount_fs() {
+    local target_mountpoint="${1:-}"
+    if mountpoint -q "${target_mountpoint}"; then
+        sudo umount -R -f "${target_mountpoint}"
+    fi
+}
+
+function mount_fs() {
+    local -a cmd_args=("${@}")
+    # Extract the last element as target
+    local target="${cmd_args[$(( ${#cmd_args[@]} - 1 ))]}"
+    # Pop the last element from cmd_args array
+    cmd_args=("${cmd_args[@]:0:$(( ${#cmd_args[@]} - 1 ))}")
+
+    [[ -n "${target}" ]] || \
+        { log error "target is not set"; return 1; }
+
+    [[ ${#cmd_args[@]} -gt 0 ]] || \
+        { log error "mount command needs more arguments" ; return 1; }
+
+    if sudo mount --mkdir "${cmd_args[@]}" "${target}"; then
+        log info "mounted '${target}'"
+    else
+        log error "failed to mount '${target}'"
+        return 1
+    fi
+}
+
+function main() {
+    local user_id="" \
+        chroot_shell="" chroot_hostname="" \
+        target_device_path=""
+
+    local -a args=("${@}")
+
+    consume_val() {
+        local -n var_ref=${1}
+        local var_value="${2:-}"
+        local -n index_ref=${3}
+        [[ -n "${var_value}" ]] || return 1
+        var_ref="${var_value}"
+        index_ref=$((index_ref+1))
+    }
+
+    local arg="" value=""
+    for ((i=0;i<${#args[@]};i++)); do
+        arg="${args[i]}"
+        [[ ( "$((${#args[@]} - i))" -ge 1 && -n "${args[$((i+1))]:-}" ) && \
+            "${args[$((i+1))]:-}" != -* ]] && \
+                value="${args[$((i+1))]:-}"
+        if [[ "${arg}" == -*=* ]]; then
+            IFS=$'=' read -r arg value <<< "${arg}"
+            [[ -n "${value}" ]] || \
+                { log error "'${arg}' requires a value"; return 1; }
+        fi
+        case "${arg}" in
+            -d|--device)
+                { consume_val target_device_path "${value}" i && continue; } || \
+                    return 1
+                ;;
+            -*) log error "invalid flag '${arg}'"; return 1 ;;
+            *) CHROOT_TARGET_DIR="${arg}" ;;
+        esac
+    done
+
+    if [[ -n "${CHROOT_TARGET_DIR}" ]]; then
+        [[ "${CHROOT_TARGET_DIR:$((${#CHROOT_TARGET_DIR}-1)):1}" == / ]] && \
+            CHROOT_TARGET_DIR="${CHROOT_TARGET_DIR:0:$((${#CHROOT_TARGET_DIR}-1))}"
+        readonly CHROOT_TARGET_DIR
+    else
+        log error "target not specified"; return 1
+    fi
+
+    if [[ -n "${target_device_path}" ]]; then
+        sudo mount "${target_device_path}" "${CHROOT_TARGET_DIR}"
+    fi
+
+    valid_files=(
+        /etc/fstab /etc/passwd
+        /etc/group /etc/mtab
+    )
+
+    for f in "${valid_files[@]}"; do
+        if [[ ! -f "${CHROOT_TARGET_DIR}/${f}" ]]; then
+            if [[ ! -L "${CHROOT_TARGET_DIR}/${f}" ]]; then
+                log error "'${CHROOT_TARGET_DIR}' doesn't look like base system"
+                log info "use '-d [DEVICE]' or '--device [DEVICE]' to mount your device on '${CHROOT_TARGET_DIR}'"
+                return 1
+            fi
+        fi
+    done
+
+    user_id="$(id -u)"
+
+    mkdir -p "${CHROOT_TARGET_DIR}" || sudo mkdir -p "${CHROOT_TARGET_DIR}"
+
+    unmount_chroot_target() {
+        umount_fs "${CHROOT_TARGET_DIR}/run" || return 1
+        umount_fs "${CHROOT_TARGET_DIR}/dev" || return 1
+        umount_fs "${CHROOT_TARGET_DIR}/sys" || return 1
+        umount_fs "${CHROOT_TARGET_DIR}/proc" || return 1
+        umount_fs "${CHROOT_TARGET_DIR}/tmp" || return 1
+    }
+
+    unmount_chroot_target
+
+    trap 'unmount_chroot_target' EXIT SIGTERM SIGINT
+
+    mount_fs -t proc proc "${CHROOT_TARGET_DIR}/proc" || return 1
+    mount_fs -t sysfs sys "${CHROOT_TARGET_DIR}/sys" || return 1
+    mount_fs -t devtmpfs udev "${CHROOT_TARGET_DIR}/dev" || return 1
+    mount_fs -t devpts pts "${CHROOT_TARGET_DIR}/dev/pts" || return 1
+    mount_fs -t tmpfs shm "${CHROOT_TARGET_DIR}/dev/shm" || return 1
+    mount_fs -t tmpfs tmp "${CHROOT_TARGET_DIR}/tmp" || return 1
+    mount_fs --bind --make-private /run "${CHROOT_TARGET_DIR}/run" || return 1
+    mount_fs --bind --make-private "/run/user/${user_id}" "${CHROOT_TARGET_DIR}/run/user/${user_id}" || return 1
+
+    [[ -d "/dev/dri" ]] && \
+        { mount_fs --bind --make-private /dev/dri "${CHROOT_TARGET_DIR}/dev/dri" || return 1; }
+    [[ -d "/sys/firmware/efi/efivars" ]] && \
+        { mount_fs --bind --make-private /sys/firmware/efi/efivars \
+            "${CHROOT_TARGET_DIR}/sys/firmware/efi/efivars" || return 1; }
+
+    printf '\n' && log info "Chroot environment set up at '${CHROOT_TARGET_DIR}'"
+
+    chroot_hostname="$(cat "${CHROOT_TARGET_DIR}/etc/hostname" 2>/dev/null || true)"
+    chroot_shell="$(grep "root:.*:0:0" "${CHROOT_TARGET_DIR}/etc/passwd" | cut -d: -f7)"
+    [[ -n "${chroot_hostname}" ]] || chroot_hostname="\h"
+
+    sudo chroot "${CHROOT_TARGET_DIR}" su root -s "${chroot_shell}" -c " \
+        PS1='(chroot) \u@${chroot_hostname} :\w $ '; \
+        HISTCONTROL='ignoredups:erasedups'; \
+        export PS1 HISTCONTROL HISTFILE; \
+        unset HISTFILE; \
+        set -o vi; \
+        printf '\n'; printf '%s\\n' \"Welcome to ${chroot_hostname}!\"; \
+        exec bash
+    "
+}
+
+main "${@}"
+

@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+
+IFS=$''
+
+trap 'Exit 0' SIGINT SIGQUIT
+trap 'Exit 1' SIGTERM
+
+function Exit() {
+    exit $1
+}
+
+function main() {
+    local hex="" rest=""
+    local KEY="" ASCII=""
+    while true; do
+        IFS= read -rsn1 KEY
+        # Handle escape sequences
+        if [[ $KEY == $'\x1b' ]]; then
+            while IFS= read -rsn1 -t 0.01 rest; do
+                KEY+="$rest"
+            done
+        fi
+        # Convert key to hex
+        hex=""
+        for ((i=0;i<${#KEY};i++)); do
+            hex+=$(printf '%02x ' "'${KEY:$i:1}")
+        done
+        if [[ ${#KEY} -eq 1 ]]; then
+            ASCII=$(printf '%d' "'$KEY")
+        else
+            ASCII="none"
+        fi
+        [[ -z $hex ]] && hex='none'
+        case "${KEY}" in
+            # q|Q) printf 'Key: 'q', Hex: '%s', ASCII: "%s"\nExiting...\n' "${hex}" "${ASCII}" ; break ;;
+            # Alphnumeric keys
+            [a-zA-Z0-9]) printf 'Key: "%s", Hex: "%s", ASCII: "%s"\n' "${KEY}" "${hex}" "${ASCII}" ;;
+
+            # Special keys
+            $'\x1b[A')  printf 'Key: Up Arrow=(%q), Hex: "%s", ASCII: "%s"\n'           "${KEY}" "${hex}" "${ASCII}" ;;
+            $'\x1b[B')  printf 'Key: Down Arrow=(%q), Hex: "%s", ASCII: "%s"\n'         "${KEY}" "${hex}" "${ASCII}" ;;
+            $'\x1b[C')  printf 'Key: Right Arrow=(%q), Hex: "%s", ASCII: "%s"\n'        "${KEY}" "${hex}" "${ASCII}" ;;
+            $'\x1b[D')  printf 'Key: Left Arrow=(%q), Hex: "%s", ASCII: "%s"\n'         "${KEY}" "${hex}" "${ASCII}" ;;
+            $'\x7f')    printf 'Key: Backspace=(%q), Hex: "%s", ASCII: "%s"\n'          "${KEY}" "${hex}" "${ASCII}" ;;
+            $'\x20')    printf 'Key: Space=(%q), Hex: "%s", ASCII: "%s"\n'              "${KEY}" "${hex}" "${ASCII}" ;;
+            $'\t')      printf 'Key: Tab=(%q), Hex: "%s", ASCII: "%s"\n'                "${KEY}" "${hex}" "${ASCII}" ;;
+            '')         printf 'Key: Enter=(%q), Hex: "%s", ASCII: "%s"\n'              "${KEY}" "${hex}" "${ASCII}" ;;
+            $'\E[27;2;13~') printf 'Key: Shift+Enter=(%q), Hex: "%s", ASCII: "%s"\n'    "${KEY}" "${hex}" "${ASCII}" ;;
+
+            # Other Special keys
+            $'\x1b[H')      printf 'Key: Home, Hex: "%s", ASCII: "%s"\n'        "${hex}" "${ASCII}" ;;
+            $'\x1b[F')      printf 'Key: End, Hex: "%s", ASCII: "%s"\n'         "${hex}" "${ASCII}" ;;
+            $'\x1b[1~')     printf 'Key: Home, Hex: "%s", ASCII: "%s"\n'        "${hex}" "${ASCII}" ;;
+            $'\x1b[4~')     printf 'Key: End, Hex: "%s", ASCII: "%s"\n'         "${hex}" "${ASCII}" ;;
+            $'\x1b[2~')     printf 'Key: Insert, Hex: "%s", ASCII: "%s"\n'      "${hex}" "${ASCII}" ;;
+            $'\x1b[3~')     printf 'Key: Delete, Hex: "%s", ASCII: "%s"\n'      "${hex}" "${ASCII}" ;;
+            $'\x1b[5~')     printf 'Key: Page Up, Hex: "%s", ASCII: "%s"\n'     "${hex}" "${ASCII}" ;;
+            $'\x1b[6~')     printf 'Key: Page Down, Hex: "%s", ASCII: "%s"\n'   "${hex}" "${ASCII}" ;;
+            $'\x1b[11~')    printf 'Key: F1, Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            $'\x1b[12~')    printf 'Key: F2, Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            $'\x1b[13~')    printf 'Key: F3, Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            $'\x1b[14~')    printf 'Key: F4, Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            $'\x1b[15~')    printf 'Key: F5, Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            $'\x1b[17~')    printf 'Key: F6, Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            $'\x1b[18~')    printf 'Key: F7, Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            $'\x1b[19~')    printf 'Key: F8, Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            $'\x1b[20~')    printf 'Key: F9, Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            $'\x1b[21~')    printf 'Key: F10, Hex: "%s", ASCII: "%s"\n'         "${hex}" "${ASCII}" ;;
+            $'\x1b[23~')    printf 'Key: F11, Hex: "%s", ASCII: "%s"\n'         "${hex}" "${ASCII}" ;;
+            $'\x1b[24~')    printf 'Key: F12, Hex: "%s", ASCII: "%s"\n'         "${hex}" "${ASCII}" ;;
+
+
+            # Alt-mode F1–F4
+            $'\x1bOP')  printf 'Key: F1, Hex: "%s", ASCII: "%s"\n'                      "${hex}" "${ASCII}" ;;
+            $'\x1bOQ')  printf 'Key: F2, Hex: "%s", ASCII: "%s"\n'                      "${hex}" "${ASCII}" ;;
+            $'\x1bOR')  printf 'Key: F3, Hex: "%s", ASCII: "%s"\n'                      "${hex}" "${ASCII}" ;;
+            $'\x1bOS')  printf 'Key: F4, Hex: "%s", ASCII: "%s"\n'                      "${hex}" "${ASCII}" ;;
+            $'\E[2')    printf 'Key: Insert, Hex: "%s", ASCII: "%s"\n'                  "${hex}" "${ASCII}" ;;
+            $'\E[6')    printf 'Key: Page Down, Hex: "%s", ASCII: "%s"\n'               "${hex}" "${ASCII}" ;;
+            $'\E[5')    printf 'Key: Page Up, Hex: "%s", ASCII: "%s"\n'                 "${hex}" "${ASCII}" ;;
+            $'\E[3')    printf 'Key: Delete, Hex: "%s", ASCII: "%s"\n'                  "${hex}" "${ASCII}" ;;
+            $'\x1b[E')  printf 'Key: Numpad 5 (NumLock Off), Hex: "%s", ASCII: "%s"\n'  "${hex}" "${ASCII}" ;;
+
+            # Symbols
+            '!')    printf 'Key: Exclamation (!), Hex: "%s", ASCII: "%s"\n'         "${hex}" "${ASCII}" ;;
+            '@')    printf 'Key: At (@), Hex: "%s", ASCII: "%s"\n'                  "${hex}" "${ASCII}" ;;
+            '#')    printf 'Key: Hash (#), Hex: "%s", ASCII: "%s"\n'                "${hex}" "${ASCII}" ;;
+            '$')    printf 'Key: Dollar ($), Hex: "%s", ASCII: "%s"\n'              "${hex}" "${ASCII}" ;;
+            '%')    printf 'Key: Percent (%%), Hex: "%s", ASCII: "%s"\n'            "${hex}" "${ASCII}" ;;
+            '^')    printf 'Key: Caret (^), Hex: "%s", ASCII: "%s"\n'               "${hex}" "${ASCII}" ;;
+            '&')    printf 'Key: Ampersand (&), Hex: "%s", ASCII: "%s"\n'           "${hex}" "${ASCII}" ;;
+            '*')    printf 'Key: Asterisk (*), Hex: "%s", ASCII: "%s"\n'            "${hex}" "${ASCII}" ;;
+            '(')    printf 'Key: Left Paren (() Hex: "%s", ASCII: "%s"\n'           "${hex}" "${ASCII}" ;;
+            ')')    printf 'Key: Right Paren ()) Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            '-')    printf 'Key: Hyphen (-), Hex: "%s", ASCII: "%s"\n'              "${hex}" "${ASCII}" ;;
+            '_')    printf 'Key: Underscore (_), Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            '+')    printf 'Key: Plus (+), Hex: "%s", ASCII: "%s"\n'                "${hex}" "${ASCII}" ;;
+            '=')    printf 'Key: Equals (=), Hex: "%s", ASCII: "%s"\n'              "${hex}" "${ASCII}" ;;
+            '`')    printf 'Key: Backtick (`), Hex: "%s", ASCII: "%s"\n'            "${hex}" "${ASCII}" ;;
+            '~')    printf 'Key: Tilde (~), Hex: "%s", ASCII: "%s"\n'               "${hex}" "${ASCII}" ;;
+            '[')    printf 'Key: Left Bracket ([), Hex: "%s", ASCII: "%s"\n'        "${hex}" "${ASCII}" ;;
+            ']')    printf 'Key: Right Bracket (]), Hex: "%s", ASCII: "%s"\n'       "${hex}" "${ASCII}" ;;
+            '{')    printf 'Key: Left Brace ({), Hex: "%s", ASCII: "%s"\n'          "${hex}" "${ASCII}" ;;
+            '}')    printf 'Key: Right Brace (}), Hex: "%s", ASCII: "%s"\n'         "${hex}" "${ASCII}" ;;
+            '|')    printf 'Key: Pipe (|), Hex: "%s", ASCII: "%s"\n'                "${hex}" "${ASCII}" ;;
+            '\')    printf 'Key: Backslash (\), Hex: "%s", ASCII: "%s"\n'           "${hex}" "${ASCII}" ;;
+            ';')    printf 'Key: Semicolon (;), Hex: "%s", ASCII: "%s"\n'           "${hex}" "${ASCII}" ;;
+            ':')    printf 'Key: Colon (:), Hex: "%s", ASCII: "%s"\n'               "${hex}" "${ASCII}" ;;
+            "'")    printf "Key: Single Quote ('), Hex: \"%s\", ASCII: \"%s\"\n"    "${hex}" "${ASCII}" ;;
+            '"')    printf 'Key: Double Quote ("), Hex: "%s", ASCII: "%s"\n'        "${hex}" "${ASCII}" ;;
+            ',')    printf 'Key: Comma (,), Hex: "%s", ASCII: "%s"\n'               "${hex}" "${ASCII}" ;;
+            '.')    printf 'Key: Period (.), Hex: "%s", ASCII: "%s"\n'              "${hex}" "${ASCII}" ;;
+            '<')    printf 'Key: Less Than (<), Hex: "%s", ASCII: "%s"\n'           "${hex}" "${ASCII}" ;;
+            '>')    printf 'Key: Greater Than (>), Hex: "%s", ASCII: "%s"\n'        "${hex}" "${ASCII}" ;;
+            '/')    printf 'Key: Slash (/), Hex: "%s", ASCII: "%s"\n'               "${hex}" "${ASCII}" ;;
+            '?')    printf 'Key: Question Mark (?), Hex: "%s", ASCII: "%s"\n'       "${hex}" "${ASCII}" ;;
+            *) printf "Unknown key: '%q' (hex: %s, ASCII: %s)\n" "${KEY}"           "${hex}" "${ASCII}" ;;
+        esac
+
+        hex=''
+    done
+}
+
+main "$@"

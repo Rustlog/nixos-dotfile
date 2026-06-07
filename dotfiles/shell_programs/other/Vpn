@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+## setup wiregurd vpn connections through single [enable|disable] flag
+
+set -euo pipefail
+
+D_WIREGUARD_FILES_DIR="$HOME/dev/txt-files/wiregurd-vpn"
+
+function log() {
+    local _type="${1}"; shift 1
+    printf '[%s]: %s\n' "${_type}" "${*//$HOME/\~}"
+    [[ "${_type}" =~ ^(error|fatal)$ ]] && return 1 || true
+}
+
+function RunCMD() {
+    log cmd_info "sudo ${*}"
+    sudo "${@}"
+}
+
+function FilePicker() {
+    local -n selected_ref
+    selected_ref=${1}
+    local selected=""
+    cd "${D_WIREGUARD_FILES_DIR}" || \
+        { log error "failed to chdir to '${D_WIREGUARD_FILES_DIR}'"; return 1; }
+    if ! selected="$(find . -mindepth 1 -maxdepth 1 -type f -print | fzf)"; then
+        log error "failed to select config"
+        return 1
+    fi
+    chmod 0600 "${D_WIREGUARD_FILES_DIR}/${selected}"
+    #shellcheck disable=SC2034
+    selected_ref="${D_WIREGUARD_FILES_DIR}/${selected}"
+}
+
+function EnableVpn() {
+    local selected_file=""
+    FilePicker selected_file || return 1
+    sed -i '/^DNS\s*=/d' "${selected_file}"
+    RunCMD wg-quick up "${selected_file}"
+}
+
+function DisableVpn() {
+    local -a enabled_vpn=()
+    mapfile -t enabled_vpn < <(sudo wg show | awk -F': ' '/interface:/ { printf "%s\n", $2 }')
+    [[ "${#enabled_vpn[@]}" -eq 0 ]] && \
+        { log info "no active vpn connection"; return 1; }
+    for vpn in "${enabled_vpn[@]}"; do
+        vpn="$(find "${D_WIREGUARD_FILES_DIR}" -mindepth 1 -maxdepth 1 -type f -wholename "*${vpn}*")" || \
+            log error "failed to find matching interface at '${D_WIREGUARD_FILES_DIR}'"
+        RunCMD wg-quick down "${vpn}"
+    done
+}
+
+function main() {
+    case "${1:-}" in
+        enable|on)      EnableVpn  ;;
+        disable|off)    DisableVpn ;;
+        *) log usage "${0##/*} [enable|disable]" ;;
+    esac
+}
+
+main "${@}"
+

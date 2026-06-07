@@ -1,0 +1,497 @@
+// Niri WM config
+// Author: Rustlog 2026
+
+// startup commands and scripts
+spawn-sh-at-startup "~/.config/niri/scripts/WaybarThemes 1"
+spawn-at-startup "playerctld"
+spawn-at-startup "nm-applet" "--indicator"
+spawn-sh-at-startup "sleep 0.4 && easyeffects --gapplication-service"
+spawn-sh-at-startup r##"
+            swayidle -w \
+            timeout 100 "~/.config/niri/lock_screen/lock.sh" \
+            resume "niri msg output "$(niri msg --json outputs | jq -r '.[].name' | tail -n1 )" on" \
+            before-sleep "~/.config/niri/lock_screen/lock.sh set_bg"
+        "##
+spawn-at-startup "mako" "--border-size=4" "--border-radius=8" \
+        "--background-color=#333333" "--default-timeout=4000" \
+        "--max-visible=4"
+spawn-at-startup "udiskie" "--notify" "--no-automount" \
+        "--no-menu-checkbox-workaround" \
+        "--no-menu-update-workaround" \
+        "--no-password-cache" "--appindicator" \
+        "--file-manager" "dolphin" \
+        "--config" "/etc/udiskie/config.yaml" \
+        "--tray"
+
+// environment variables
+environment {
+    QT_QPA_PLATFORM         "wayland"
+    QT_QPA_PLATFORMTHEME    "qt6ct"
+    GTK_THEME               "Breeze:dark"
+}
+
+// cursor
+cursor {
+    xcursor-theme "breeze_cursors"
+    xcursor-size 24
+    hide-when-typing
+    hide-after-inactive-ms 4000
+}
+
+// input devices
+input {
+    keyboard {
+        xkb { layout "us,es,ru"; }
+        repeat-delay 240
+        repeat-rate 60
+        numlock // enable numlock
+    }
+
+    touchpad {
+        tap
+        drag true
+        natural-scroll
+        accel-speed 1
+        accel-profile "flat"
+        scroll-method "two-finger"
+        disabled-on-external-mouse
+    }
+
+    mouse {
+        natural-scroll
+        accel-speed 1
+        accel-profile "flat"
+        scroll-method "no-scroll"
+    }
+
+    // mouse warp to the center of newly focused windows
+    warp-mouse-to-focus
+}
+
+// window layout and other stuff
+layout {
+    gaps 8
+    center-focused-column "on-overflow"
+    default-column-width { proportion 1.0; }
+    focus-ring { off; }
+    border {
+        on
+        width 1
+        active-color "#88888888"
+        inactive-color "#66666688"
+        urgent-color "#9b0000"
+    }
+    shadow {
+        on
+        softness 10
+        spread 1
+        offset x=0 y=0
+        color "#333732"
+    }
+    background-color "transparent"
+}
+
+overview {
+    zoom 0.34
+    backdrop-color "#262626"
+    workspace-shadow {
+        softness 40
+        spread 10
+        offset x=0 y=10
+        color "#00000050"
+    }
+}
+
+// keybindings
+binds {
+
+    // move to workspace
+    Mod+1 { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+    Mod+5 { focus-workspace 5; }
+    Mod+6 { focus-workspace 6; }
+    Mod+7 { focus-workspace 7; }
+    Mod+8 { focus-workspace 8; }
+
+    // move focused window to numbered workspace
+    Mod+Shift+1 { move-column-to-workspace 1; }
+    Mod+Shift+2 { move-column-to-workspace 2; }
+    Mod+Shift+3 { move-column-to-workspace 3; }
+    Mod+Shift+4 { move-column-to-workspace 4; }
+    Mod+Shift+5 { move-column-to-workspace 5; }
+    Mod+Shift+6 { move-column-to-workspace 6; }
+    Mod+Shift+7 { move-column-to-workspace 7; }
+    Mod+Shift+8 { move-column-to-workspace 8; }
+
+    // switch focus and move to window ( with vim keys )
+    Mod+H     { focus-column-left; }
+    Mod+J     { focus-window-down; }
+    Mod+K     { focus-window-up; }
+    Mod+L     { focus-column-right; }
+    // // switch focus and move to window ( with arrow keys )
+    // Mod+Left  { focus-column-left; }
+    // Mod+Down  { focus-window-down; }
+    // Mod+Up    { focus-window-up; }
+    // Mod+Right { focus-column-right; }
+
+    // resize window
+    Mod+Ctrl+H { set-column-width "-10%"; }
+    Mod+Ctrl+L { set-column-width "+10%"; }
+    Mod+Ctrl+K { set-window-height "-10%"; }
+    Mod+Ctrl+J { set-window-height "+10%"; }
+
+    // move window ( with vim keys )
+    Mod+Shift+H     { move-column-left; }
+    Mod+Shift+J     { move-window-down; }
+    Mod+Shift+K     { move-window-up; }
+    Mod+Shift+L     { move-column-right; }
+    // move window ( with arrow keys )
+    // Mod+Ctrl+Left  { move-column-left; }
+    // Mod+Ctrl+Down  { move-window-down; }
+    // Mod+Ctrl+Up    { move-window-up; }
+    // Mod+Ctrl+Right { move-column-right; }
+    //
+    // Mod+Shift+Left  { focus-monitor-left; }
+    // Mod+Shift+Down  { focus-monitor-down; }
+    // Mod+Shift+Up    { focus-monitor-up; }
+    // Mod+Shift+Right { focus-monitor-right; }
+
+    Mod+Shift+Ctrl+H     { move-column-to-monitor-left; }
+    Mod+Shift+Ctrl+J     { move-column-to-monitor-down; }
+    Mod+Shift+Ctrl+K     { move-column-to-monitor-up; }
+    Mod+Shift+Ctrl+L     { move-column-to-monitor-right; }
+    Mod+Shift+Ctrl+Left  { move-column-to-monitor-left; }
+    Mod+Shift+Ctrl+Down  { move-column-to-monitor-down; }
+    Mod+Shift+Ctrl+Up    { move-column-to-monitor-up; }
+    Mod+Shift+Ctrl+Right { move-column-to-monitor-right; }
+
+    Mod+WheelScrollDown      cooldown-ms=150 { focus-workspace-down; }
+    Mod+WheelScrollUp        cooldown-ms=150 { focus-workspace-up; }
+    Mod+Ctrl+WheelScrollDown cooldown-ms=150 { move-column-to-workspace-down; }
+    Mod+Ctrl+WheelScrollUp   cooldown-ms=150 { move-column-to-workspace-up; }
+
+    Mod+WheelScrollRight      { focus-column-right; }
+    Mod+WheelScrollLeft       { focus-column-left; }
+    Mod+Ctrl+WheelScrollRight { move-column-right; }
+    Mod+Ctrl+WheelScrollLeft  { move-column-left; }
+
+    Mod+Shift+WheelScrollDown      { focus-column-right; }
+    Mod+Shift+WheelScrollUp        { focus-column-left; }
+    Mod+Ctrl+Shift+WheelScrollDown { move-column-right; }
+    Mod+Ctrl+Shift+WheelScrollUp   { move-column-left; }
+
+    // navigate workspace up and down
+    Mod+U              { focus-workspace-up; }
+    Mod+D              { focus-workspace-down; }
+
+    // move focused window to workspace up and down
+    Mod+Ctrl+U         { move-column-to-workspace-up; }
+    Mod+Ctrl+D         { move-column-to-workspace-down; }
+
+    // move the entire workspace up and down
+    Mod+Shift+U         { move-workspace-up; }
+    Mod+Shift+D         { move-workspace-down; }
+
+    // consume one window from the right to the bottom of the focused column.
+    Mod+Comma  { consume-window-into-column; }
+    // expel the bottom window from the focused column to the right.
+    Mod+Period { expel-window-from-column; }
+
+    // fullscreen a window
+    Mod+F { fullscreen-window; }
+
+    // makes the window "fill the rest of the space".
+    Mod+Ctrl+F { expand-column-to-available-width; }
+    Mod+M { maximize-column; }
+
+    // center a window
+    Mod+C { center-column; }
+
+    // Center all fully visible window on screen.
+    Mod+Ctrl+C { center-visible-columns; }
+
+    // switch between floating and titling window
+    Mod+Space       { switch-focus-between-floating-and-tiling; }
+    // toggle a window to tile or float
+    Mod+Shift+Space { toggle-window-floating; }
+
+    // enable tabs on a focused window
+    Mod+T { toggle-column-tabbed-display; }
+
+    // toggle overview mode
+    Mod+O repeat=false { toggle-overview; }
+
+    // close/kill the focused window
+    Mod+Q { close-window; }
+
+    // terminal: foot
+    Mod+Return hotkey-overlay-title="Terminal: foot" { spawn "foot"; }
+    // terminal: alacritty
+    Mod+Shift+Return hotkey-overlay-title="Terminal: alacritty" { spawn "alacritty"; }
+
+    // application launcher: fuzzel
+    Alt+Space hotkey-overlay-title="Application Launcher: fuzzel" {
+        spawn "fuzzel" \
+            "--background=#333333FA" \
+            "--text-color=#BBBBBBFF" \
+            "--width=60" \
+            "--lines=10" \
+            "--prompt=Search: "
+    }
+
+    // lockscreen
+    Super+Alt+Delete hotkey-overlay-title="Lock the Screen: swaylock" {
+        spawn "~/.config/niri/lock_screen/lock.sh" "set_bg"
+    }
+
+    // show important hotkeys
+    Mod+Shift+Slash { show-hotkey-overlay; }
+
+    // brightness control
+    XF86MonBrightnessUp hotkey-overlay-title="Increase Brightness" {
+        spawn "brightnessctl" "set" "5%+"
+    }
+    XF86MonBrightnessDown hotkey-overlay-title="Decrease Brightness" {
+        spawn "brightnessctl" "set" "5%-"
+    }
+
+    // volume keys mappings for PipeWire & WirePlumber ( F keys )
+    XF86AudioRaiseVolume hotkey-overlay-title="Increase Volume" allow-when-locked=true {
+        spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+"
+    }
+    XF86AudioLowerVolume hotkey-overlay-title="Decrease Volume" allow-when-locked=true {
+        spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-"
+    }
+    XF86AudioMute        hotkey-overlay-title="Toggle Mute"   allow-when-locked=true   {
+        spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"
+    }
+    XF86AudioMicMute     hotkey-overlay-title="Toggle Mute Mic" allow-when-locked=true {
+        spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"
+    }
+
+    // audio & video control (mpris)
+    Mod+Up   hotkey-overlay-title="Toggle play-pause" allow-when-locked=true {
+        spawn "playerctl" "play-pause"
+    }
+    Mod+Down hotkey-overlay-title="Toggle Mute"       allow-when-locked=true {
+        spawn "pactl" "set-sink-mute" "@DEFAULT_SINK@" "toggle"
+    }
+
+    // seek media forward
+    Mod+Ctrl+Right hotkey-overlay-title="Seek Media Forward by 5sec" {
+        spawn-sh r##"
+            playerctl position \
+            $( awk "BEGIN { print ($(playerctl position) + 5)  }" )
+        "##
+    }
+    Mod+Right hotkey-overlay-title="Seek Media Forward by 10sec" {
+        spawn-sh r##"
+            playerctl position \
+            $( awk "BEGIN { print ($(playerctl position) + 10)  }" )
+        "##
+    }
+    Mod+Shift+Right hotkey-overlay-title="Seek Media Forward by 20sec" {
+        spawn-sh r##"
+            playerctl position \
+            $( awk "BEGIN { print ($(playerctl position) + 20)  }" )
+        "##
+    }
+
+    // seek media backward
+    Mod+Ctrl+Left hotkey-overlay-title="Seek Media Backward by 5sec" {
+        spawn-sh r##"
+            playerctl position \
+            $( awk "BEGIN { print ($(playerctl position) - 5)  }" )
+        "##
+    }
+    Mod+Left hotkey-overlay-title="Seek Media Backward by 10sec" {
+        spawn-sh r##"
+            playerctl position \
+            $( awk "BEGIN { print ($(playerctl position) - 10)  }" )
+        "##
+    }
+    Mod+Shift+Left hotkey-overlay-title="Seek Media Backward by 20sec" {
+        spawn-sh r##"
+            playerctl position \
+            $( awk "BEGIN { print ($(playerctl position) - 20)  }" )
+        "##
+    }
+
+    // increase volume
+    Mod+Ctrl+Up hotkey-overlay-title="Increase Volume" {
+        spawn-sh r##"
+            playerctl volume \
+            $( awk "BEGIN { print ($(playerctl volume) + 1/20)  }" )
+        "##
+    }
+    // decrease volume
+    Mod+Ctrl+Down hotkey-overlay-title="Decrease Volume" {
+        spawn-sh r##"
+            playerctl volume \
+            $( awk "BEGIN { print ($(playerctl volume) - 1/20)  }" )
+        "##
+    }
+
+    // play up next media
+    Mod+Shift+Up hotkey-overlay-title="Play up Next Media" {
+        spawn "playerctl" "next"
+    }
+    // play previous
+    Mod+Shift+Down hotkey-overlay-title="Play Previous" {
+        spawn "playerctl" "previous"
+    }
+
+    // file manager dolphin
+    Mod+E hotkey-overlay-title="File Manager: dolphin" {
+        spawn "env" "QT_QPA_PLATFORMTHEME=qt6ct" "dolphin"
+    }
+
+    // keyboard layout switching
+    Mod+Alt+Space hotkey-overlay-title="Next Layout in Keyboard" {
+        switch-layout "next"
+    }
+    Mod+Shift+Alt+Space hotkey-overlay-title="Previous Layout in Keyboard" {
+        switch-layout "prev"
+    }
+
+    // screenshot and screen recording utils
+
+    // full screenshot (invoke grim)
+    Mod+Print hotkey-overlay-title="Fullscreen Screenshot (invoke grim)" {
+        spawn-sh r##"
+            DIR="$HOME/media/pictures/grim"
+            mkdir -p "${DIR}"
+            OUTPUT="${DIR}/$(date +"%F_%T:$(printf '%d\n' "$(date +%N)" | cut -b1-2)").jpeg"
+            grim -t jpeg -q 100 "${OUTPUT}"
+        "##;
+    }
+
+    // selected area screenshot (invoke grim with slurp)
+    Mod+Shift+S hotkey-overlay-title="Selected Area Screenshot (invoke grim with slurp)" {
+        spawn-sh r##"
+            DIR="$HOME/media/pictures/grim"
+            mkdir -p "${DIR}"
+            OUTPUT="${DIR}/$(date +"%F_%T:$(printf '%d\n' "$(date +%N)" | cut -b1-2)").jpeg"
+            grim -g "$(slurp -b aaccbb11)" -t jpeg -q 100 "${OUTPUT}"
+        "##;
+    }
+
+    // fullscreen screen-recording ( invoke wf-recorder )
+    Mod+Alt+V hotkey-overlay-title="Fullscreen Screen-Recording (invoke wf-recorder)" {
+        spawn "bash" "-c" r##"
+        DIR="${HOME}/media/videos/wf-recorder"
+        if [[ ! -d "${DIR}" ]]; then
+            mkdir -p "${DIR}"; pidof wf-recorder &> /dev/null
+        else
+            declare -a flags
+            flags=(
+                "--pixel-format=yuv420p"
+                "--framerate=60"
+                "--audio=$(pactl get-default-sink).monitor"
+                "--file=${DIR}/$(date +rec_%F_%T.mkv)"
+            );
+        fi
+        notify-send -t 1000 "Screen recording started (fullscreen)"
+        if ! wf-recorder "${flags[@]}" --codec=h264_nvenc -p preset=fast; then
+            wf-recorder "${flags[@]}" --codec=libx264 -p preset=ultrafast
+        fi
+        "##;
+    }
+
+    // selected area screen-recording ( invoke wf-recorder with slurp )
+    Mod+Shift+V hotkey-overlay-title="Selected Area Screen-Recording (invoke wf-recorder with slurp)" {
+        spawn "bash" "-c" r##"
+            DIR="${HOME}/media/videos/wf-recorder"
+            if [[ ! -d "${DIR}" ]]; then
+                mkdir -p "${DIR}"; pidof wf-recorder &> /dev/null
+            else
+                declare -a flags
+                flags=(
+                    "--pixel-format=yuv420p"
+                    "--framerate=60"
+                    "--audio=$(pactl get-default-sink).monitor"
+                    "--geometry=$(slurp -b aaccbb11)"
+                    "--file=${DIR}/$(date +rec_%F_%T.mkv)"
+                );
+            fi
+            notify-send -t 1000 "Screen recording started (fullscreen)"
+            if ! wf-recorder "${flags[@]}" --codec=h264_nvenc -p preset=fast; then
+                wf-recorder "${flags[@]}" --codec=libx264 -p preset=ultrafast
+            fi
+        "##;
+    }
+
+    // stop wf-recorder screen-recording
+    Mod+Alt+C hotkey-overlay-title="Stop wf-recorder Screen-Recording" {
+        spawn-sh r##"
+            notify-send -t 3000 "Recording Stopped"
+            kill -INT "$(pidof wf-recorder)"
+        "##;
+    }
+
+    // WaybarThemes signals
+    Mod+F10 hotkey-overlay-title="Reload Current Theme" {
+        spawn "pkill" "-SIGUSR2" "-f" "WaybarThemes 1"
+    }
+    Mod+Shift+F10 hotkey-overlay-title="Cycle Next Themes" {
+        spawn "pkill" "-SIGUSR1" "-f" "WaybarThemes 1"
+    }
+
+    // power down the monitor
+    Mod+Shift+P { power-off-monitors; }
+
+    // The quit action will show a confirmation dialog to avoid accidental exits.
+    Mod+Shift+E { quit skip-confirmation=true; }
+    Ctrl+Alt+Delete { quit; }
+
+    // screenshot
+    Print { screenshot; }
+    Ctrl+Print { screenshot-screen; }
+    Alt+Print { screenshot-window; }
+
+    // escape hatch if remote desktop or vm traps the keyboard
+    Mod+Shift+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+}
+
+screenshot-path "~/media/pictures/screenshot/%F-%H-%M-%S.png"
+
+// enable floating if rule matches
+window-rule {
+    match app-id=r#"(waterfox|pavucontrol|qutebrowser)$"#
+    match app-id=r#"(easyeffects|dolphin|blender|udiskie)$"#
+    match app-id=r#"^(blueman-manager|nm-connection-editor)$"#
+    match app-id=r#"(obsproject|okular|konsole)"#
+    match app-id=r#"(elisa|kclock)$"#
+    match app-id=r#"(xdg-desktop-portal)"#
+    match title=r#"^(Open File)$"#
+    match title=r#"^(Picture-in-Picture)$"#
+    open-floating true
+}
+
+// wallpaper in niri overview
+layer-rule {
+    match namespace="^(awww-daemon|wallpaper)$"
+    place-within-backdrop true
+    background-effect {
+        blur true
+        noise 0.4
+    }
+}
+
+// global window rules
+window-rule {
+    geometry-corner-radius 4
+    clip-to-geometry true
+}
+
+// animation
+animations {
+    slowdown 0.6
+}
+
+hotkey-overlay { skip-at-startup; }
+
+prefer-no-csd
+

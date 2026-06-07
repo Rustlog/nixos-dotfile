@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+
+builtin set -uo pipefail
+
+LOGGING=${1:-0}
+R="$(hexdump -vn3 -e '/1 "%02x"' /dev/urandom)"
+WORK_DIR="/tmp/waybar/${0##*/}"
+SOCKET="${WORK_DIR}/NowPlayingSocket_X_${R}.sock"
+LOG_FILE="${SOCKET}.log"
+
+pgrep -f "${0}" | grep -v "$$" | xargs -r kill -SIGTERM
+pkill -f "socat -u UNIX-LISTEN:${WORK_DIR}/NowPlayingSocket_X_.*.sock,fork -"
+
+function log() {
+    local _type="${1:-""}"; shift 1
+    if [[ $LOGGING -eq 1 ]]; then
+        printf '[%s]: %b\n' "${_type}" "${*}" 1>&2 # to stderr
+        printf '[%s]: %b\n' "${_type}" "${*}" &>> "${LOG_FILE}"
+    fi
+}
+
+function CheckPlay() {
+    local -i found_playing=0
+    local title="" artist="" status_=""
+    local album="" combined_output=""
+
+    status_="$(playerctl --player=playerctld status 2>/dev/null)"
+
+    if [[ "${status_}" == "Playing" ]]; then
+
+        title="$(playerctl --player=playerctld metadata title 2> /dev/null)"
+        artist="$(playerctl --player=playerctld metadata artist 2> /dev/null)"
+        album="$(playerctl --player=playerctld metadata album 2> /dev/null)"
+
+        if [[ "${title}" == "Advertisement" ]]; then
+            pactl set-sink-mute @DEFAULT_SINK@ true
+        else
+            pactl set-sink-mute @DEFAULT_SINK@ false
+        fi
+
+        if [[ -n "${artist}" ]]; then
+            combined_output="${artist} - ${title}"
+        else
+            combined_output="${title}"
+        fi
+
+        [[ -n "${album}" ]] && combined_output="${combined_output} (${album})"
+
+        combined_output="$(sed -e 's@\\@\\\\@g' \
+            -e 's@\"@\\\"@g' \
+            -e 's@\t@\\t@g' \
+            -e 's@\r@\\r@g' \
+            -e 's@\n@\\n@g' \
+            -e 's@\f@\\f@g' <<< "${combined_output}"
+        )"
+        found_playing=1
+    fi
+
+    if (( found_playing )) ; then
+        if [[ "${last_played}" != "${combined_output}" ]] || (( was_playing == 0 )); then
+            log info "Playing: '${combined_output}'"
+            socat - UNIX-CONNECT:"${SOCKET}" <<< "{\"text\": \"${combined_output}\", \"class\": \"active\"}"
+            last_played="${combined_output}"
+        fi
+        was_playing=1
+    else
+        if (( was_playing )); then
+            combined_output=""
+            log info "Playback stopped"
+            socat - UNIX-CONNECT:"${SOCKET}" <<< "{\"text\": \"${combined_output}\", \"class\": \"inactive\"}"
+            last_played="" was_playing=0
+        fi
+    fi
+}
+
+function Exit() {
+    if [[ ${#pids[@]} -gt 0 ]]; then
+        for pid in "${pids[@]}"; do
+            ps -p "${pid}" &> /dev/null || continue
+            { kill -SIGTERM "${pid}" && log info "Killed pid '${pid}'"; } || \
+                log error "Failed to kill pid '${pids}'"
+        done
+    fi
+    rm -f "${SOCKET}" "${LOG_FILE}" &> /dev/null
+    log error "\nExiting... Bye!\n"
+    exit $?
+}
+
+function NowPlaying_Listener() {
+    [[ -n "${SOCKET}" ]] || { log error "SOCKET variable is not set"; return 1; }
+    [[ -S "${SOCKET}" ]] && { log info "Removing existing socket"; rm -f "${SOCKET}" &> /dev/null && sleep 0.1; }
+    socat -u UNIX-LISTEN:"${SOCKET}",fork - | while read -r line; do
+        printf '%s\n' "${line:-"{}"}"
+    done &
+    pids+=("$!")
+}
+
+function main() {
+    local -g pids=()
+    local -g was_playing=0 last_played=""
+    mkdir -p "${WORK_DIR}"
+    [[ $LOGGING -eq 1 ]] && log info "Logging on"
+    NowPlaying_Listener
+    trap 'Exit' EXIT SIGINT SIGTERM
+    [[ ${#pids[@]} -ge 1 ]] || return 1
+    while true; do CheckPlay sleep 0.4; done
+}
+
+main "${@}"
+

@@ -1,0 +1,468 @@
+#!/usr/bin/env bash
+
+builtin set -euo pipefail
+
+PROGRAM="${0##*/}"
+D_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/${PROGRAM}"
+F_DECLARATIVE_MAPPING_CONF="${D_CONFIG_DIR}/${PROGRAM}.conf"
+readonly F_DECLARATIVE_MAPPING_CONF
+
+NO_COLOR=0
+FORCE=0
+LOGLEVEL="${LOGLEVEL:-2}"
+
+# Colors
+YELLOW="\033[38;2;244;244;100m"
+BLUE="\033[38;2;120;120;244m"
+NC="\033[0m"
+
+# Pretty logger
+function log() {
+    local _type="${1:-}"; shift
+    local _color="" _t="" severity=""
+    local -i default_level=4
+
+    local -A level=(
+        [error]=1
+        [fatal]=1
+        [warn]=1
+        [info]=2
+        [sync]=3
+        [debug]=4
+    )
+
+    local -g _info_color="" _warn_color="" _error_color=""
+        _fatal_color="" _other_color="" _nc=""
+    _info_color="" _warn_color="" _error_color="" _fatal_color="" _other_color="" _nc=""
+    is_flag_disabled "$NO_COLOR" && _info_color="\033[38;2;85;255;126m" \
+        _warn_color="\033[38;2;255;170;10m" _error_color="\033[38;2;244;29;31m" \
+        _fatal_color="\033[5m\033[38;2;255;0;0m" _other_color="\033[38;2;251;255;208m" _nc="\033[0m"
+    case "${_type}" in
+        info) _color="${_info_color:-}" _t="*"    ;;
+        warn) _color="${_warn_color:-}" _t="^"    ;;
+        error) _color="${_error_color:-}" _t="!"  ;;
+        fatal) _color="${_fatal_color:-}" _t="#"  ;;
+        *) _color="${_other_color-""}" _t=""      ;;
+    esac
+
+    severity="${level[${_type}]:-${default_level}}"
+
+    case "${LOGLEVEL}" in
+        error|err) LOGLEVEL=1 ;;
+        fatal) LOGLEVEL=1 ;;
+        info|inf) LOGLEVEL=2 ;;
+        debug) LOGLEVEL=3 ;;
+    esac
+
+    (( LOGLEVEL >= severity )) || return 0
+
+    printf "[%b%s%b%s]: %b\n" \
+        "${_color}" "${_type}" "${_nc}" "${_t}" "${*//$HOME/\~}"
+    return 0
+}
+
+function Usage() {
+    printf '%s\n' \
+    "" \
+    "usage: ${PROGRAM} [global_opt] [action] [extra]" \
+    "" \
+    "action:" \
+    "   sync                    synchronize (system -> repo)" \
+    "   deploy                  deploy (repo -> system)" \
+    "   deploy_link             deploy (repo -> system) as symlinks" \
+    "   edit-config             edit coniguration mapping" \
+    "" \
+    "global_opt:" \
+    "   --loglevel,-l           set loglevel" \
+    "   --force                 skip user prompt" \
+    "   --verbose               verbose mode" \
+    "   --debug                 enable debug mode" \
+    "   --dry-run               print commands and success markers (no action performed)" \
+    "" \
+    "extra:" \
+    "   --dereference_links     copy real source instead of link" \
+    "   --link                  only used with 'deploy' action or prefer 'deploy_link'" \
+    ""
+}
+
+# HELPER function -- Variable is not empty
+function require_var() {
+    local var="${1:-}" _type="${2:-}" msg="${3:-}"
+    [[ -n "${var}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Variable is empty
+function is_var_empty() {
+    local var="${1:-}" _type="${2:-}" msg="${3:-}"
+    [[ -z "${var}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check file existance
+function require_file() {
+    local file="${1}" _type="${2:-}" msg="${3:-}"
+    [[ -s "${file}" && -f "${file}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check regular file existance
+function require_regular_file() {
+    local file="${1}" _type="${2:-}" msg="${3:-}"
+    [[ -f "${file}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check directory existance
+function require_dir() {
+    local dir="${1}" _type="${2:-}" msg="${3:-}"
+    [[ -d "${dir}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check enabled state
+function is_flag_enabled() {
+    local -i var=${1}
+    [[ "$var" -eq 1 ]] && return 0
+    return 1
+}
+
+# HELPER function -- Check disabled state
+function is_flag_disabled() {
+    local -i var=${1}
+    [[ "$var" -eq 0 ]] && return 0
+    return 1
+}
+
+# HELPER function -- create base dir
+function CreateBaseDir() {
+    local path="${1:-}"
+    local base_dir="${path%/*}"
+
+    can_prompt_user() {
+        { is_flag_disabled "$FORCE" && return 0; } || return 1
+    }
+
+    if ! mkdir -p "${base_dir}"; then
+        log warn "failed to created base dir '$(ColorPath "${base_dir}")'"
+        can_prompt_user || { sudo mkdir -p "${base_dir}"; return 0; }
+        printf '%s' "create dir with with sudo? (y|n): ";
+        read -r -n1 ans; printf '\n'
+        [[ "${ans}" =~ '^(y|Y)$' ]] || return 1
+        sudo mkdir -p "${base_dir}"
+    fi
+}
+
+# HELPER function -- colors based on filetype
+function ColorPath() {
+    local t="${1:-}"
+    if [[ -f "${t}" ]]; then
+        printf '%b\n' "${YELLOW}${t}${NC}"
+    elif [[ -d "${t}" ]]; then
+        printf '%b\n' "${BLUE}${t}${NC}"
+    else printf '%b\n' "${t}"
+    fi
+    return 1
+}
+
+# default config for
+function WriteDefaultConfig() {
+    local given_file="${1:-}"
+    cat > "${given_file}" << EOF
+#!/bin/false
+
+GIT_DIR="\${HOME}/dev/projects/repos/dotfiles"
+
+# Your Remote username
+REMOTE_USERNAME=""
+# Your Remote repository name
+REPO_NAME=""
+
+CONF_DIR="\${HOME}/.config"
+C="\${CONF_DIR}"
+H="\${HOME}"
+
+### declarative mapping: files and dirs to sync to repo
+
+DM_FILES=(
+
+    # Examples:
+    # "\${H}/.shell_rc|\${GIT_DIR}/shell/shell_rc"
+    # "\${H}/.bashrc|\${GIT_DIR}/shell/bashrc"
+
+)
+
+DM_DIRS=(
+    # => fmt: src_dir | dest_dir | mirror_mode | dereference_links
+    # => each entry:
+    #  src_dir           -> source directory
+    #  dest_dir          -> destination directory (repo)
+    #  mirror_mode       -> 1 (remove extraneous from dest dir), 0 (leave untouched)
+    #  dereference_links -> 1 (copy symlink reference)         , 0 (preserve symlinks)
+
+    # Examples:
+    # "\${H}/.bin|\${GIT_DIR}/shell_programs|1|1"
+    # "\${C}/sway|\${GIT_DIR}/sway|1|0"
+
+)
+
+# vim:filetype=config
+# vim:filetype=iss
+
+EOF
+}
+
+function DoAction() {
+    local do_action="${1:-}" comm="${2:-}" flags="${3:-}" src="${4:-}" dest="${5:-}"
+
+    log debug "${comm} ${flags} $(ColorPath "${src}") $(ColorPath "${dest}")"
+
+    if [[ -z "${src}" ]]; then
+        log warn "src: '$(ColorPath "${src}")' is empty, skipping"; return 0
+    elif [[ -z "${dest}" ]]; then
+        log warn "dest: '$(ColorPath "${dest}")' is empty, skipping"; return 0
+    fi
+
+    [[ -e "${src}" ]] || \
+        { log warn "src: '$(ColorPath "${src}")' doesn't exist, skipping"; return 0; }
+
+    CreateBaseDir "${dest}" || \
+        { log error "failed to create '${dest}' exiting"; return 1; }
+
+    case "${do_action}" in
+        SYNC_File)
+            ${comm:+ ${comm}} ${flags:+ ${flags}} "${src}" "${dest}" || \
+    { log error "failed to sync: '$(ColorPath "${src}")' -> '$(ColorPath "${dest}")'"; return 0; }
+            log sync "synced: '$(ColorPath "${src}")' -> '$(ColorPath "${dest}")'"
+            ;;
+        MK_Symlink)
+    [[ -L "${dest}" ]] && { log warn "'$(ColorPath "${dest}")' already symlinked, skipping"; return 0; }
+            ${comm:+ ${comm}} ${flags:+ ${flags}} "${src}" "${dest}" || \
+    { log error "failed to link: '$(ColorPath "${src}")' -> '$(ColorPath "${dest}")'"; return 0; }
+            log sync "linked: '$(ColorPath "${src}")' -> '$(ColorPath "${dest}")'"
+            ;;
+        SYNC_DirContents)
+            ${comm:+ ${comm}} ${flags:+ ${flags}} "${src}/." "${dest}/" || \
+    { log error "failed to sync: '$(ColorPath "${src}/.")' -> '$(ColorPath "${dest}/")'"; return 0; }
+            log sync "synced: '$(ColorPath "${src}")' -> '$(ColorPath "${dest}")'"
+            ;;
+        *)
+            log error "unknown action"
+            return 1
+            ;;
+    esac
+}
+
+function ActionDo() {
+    local -n vars_ref=${1}
+    local action="${2:-}"
+    local IFS FROM TO
+
+    for filemap in "${DM_FILES[@]}"; do
+        IFS=$'|' read -r src_file dest_file <<< "${filemap}"
+        FROM="${src_file}" TO="${dest_file}"
+
+        case "${action}" in
+            sync)
+        log debug "DoAction SYNC_File ${vars_ref[sync_command]} ${vars_ref[sync_flags]}" \
+            "$(ColorPath "${FROM}") $(ColorPath "${TO}")"
+        DoAction "SYNC_File" "${vars_ref[sync_command]}" "${vars_ref[sync_flags]}" \
+            "${FROM}" "${TO}"
+                ;;
+
+            deploy)
+                FROM="${dest_file}" TO="${src_file}"
+        log debug "DoAction SYNC_File ${vars_ref[sync_command]} ${vars_ref[sync_flags]}" \
+            "$(ColorPath "${FROM}") $(ColorPath "${TO}")"
+        DoAction "SYNC_File" "${vars_ref[sync_command]}" "${vars_ref[sync_flags]}" \
+            "${FROM}" "${TO}"
+            ;;
+            deploy_symlink)
+                FROM="${dest_file}" TO="${src_file}"
+                log debug "DoAction MK_Symlink ${vars_ref[sync_command]} -sf" \
+                    "'$(ColorPath "${FROM}")' '$(ColorPath "${TO}")'"
+                DoAction "MK_Symlink" "${vars_ref[sync_command]}" "-sf" \
+                    "${FROM}" "${TO}"
+            ;;
+        esac
+    done
+
+    for dirmap in "${DM_DIRS[@]}"; do
+        IFS=$'|' read -r src_dir dest_dir delete_flag dereference_links <<< "${dirmap}"
+        is_flag_enabled "$delete_flag" && vars_ref[sync_flags]="${vars_ref[sync_flags]} --delete"
+        is_flag_enabled "$dereference_links" && vars_ref[sync_flags]="${vars_ref[sync_flags]} -L"
+        FROM="${src_dir}" TO="${dest_dir}"
+        case "${action}" in
+            sync)
+    log debug "DoAction SYNC_DirContents ${vars_ref[sync_command]} ${vars_ref[sync_flags]}" \
+        "$(ColorPath "${FROM}") $(ColorPath "${TO}")"
+        DoAction "SYNC_DirContents" "${vars_ref[sync_command]}" "${vars_ref[sync_flags]}" \
+            "${FROM}" "${TO}" ;;
+            deploy)
+                FROM="${dest_dir}" TO="${src_dir}"
+    log debug "DoAction SYNC_DirContents ${vars_ref[sync_command]} ${vars_ref[sync_flags]}" \
+        "$(ColorPath "${FROM}") $(ColorPath "${TO}")"
+        DoAction "SYNC_DirContents" "${vars_ref[sync_command]}" "${vars_ref[sync_flags]}" \
+            "${FROM}" "${TO}"
+                ;;
+            deploy_symlink)
+                FROM="${dest_dir}" TO="${src_dir}"
+            log debug "DoAction MK_Symlink ${vars_ref[sync_command]} -sf" \
+                "'$(ColorPath "${FROM}")' '$(ColorPath "${TO}")'"
+                DoAction "MK_Symlink" "${vars_ref[sync_command]}" "-sf" \
+                    "${FROM}" "${TO}"
+            ;;
+        esac
+    done
+}
+
+# flag parser
+function parse_args() {
+    local -n args=${1}
+    local -n vars_ref=${2}
+
+    consume_val() {
+        # usage: consume_val LOGLEVEL "${value}" i "info"
+        local -n var_ref=${1}
+        local var_value="${2:-}"
+        local -n index_ref=${3}
+        local default_value="${4:-}"
+        [[ -n "${var_value}" && "${var_value}" != -* ]] || \
+            { var_ref="${default_value}"; return 0; }
+        var_ref="${var_value}" index_ref=$((index_ref+1))
+    }
+
+    local arg="" value="" m="" k=0
+    for ((i=0;i<${#args[@]};i++)); do
+        arg="${args[i]}" k=$((k+1)) value=""
+        [[ ( "$((${#args[@]} - i))" -ge 1 && -n "${args[i+1]:-}" ) && \
+            "${args[i+1]:-}" != -* ]] && \
+            value="${args[i+1]:-}"
+        if [[ "${arg}" == *=* ]]; then
+            value="${arg#*=}" arg="${arg%=*}" i=$((i-1))
+            [[ -n "${value:-}" ]] || \
+                { log error "'${arg}' requires a value"; return 1; }
+        fi
+        if [[ "$k" = 1 ]] || is_var_empty "${m}"; then
+            case "${arg}" in
+                sync) vars_ref[sync]=1 vars_ref[deploy]=0 m="${arg}" ; continue ;;
+                deploy) vars_ref[sync]=0 vars_ref[deploy]=1 m="${arg}" ; continue ;;
+                deploy[-_]link) vars_ref[sync]=0
+        vars_ref[deploy]=1 vars_ref[deploy_link]=1 vars_ref[sync_command]="ln" m="${arg}" ; continue ;;
+                edit[-_]conf*) vars_ref[edit_config]=1 m="${arg}"; continue ;;
+                --force) vars_ref[force]=1 FORCE=1; continue ;;
+                --dry[-_]run|dry) vars_ref[dry_run]=1; continue ;;
+                --help) vars_ref[show_help]=1; continue ;;
+                --loglevel|-l) consume_val LOGLEVEL "${value}" i "2"; continue ;;
+                --debug) LOGLEVEL=4; continue ;;
+                --verbose) LOGLEVEL=3; continue ;;
+                *) log error "Invalid $({ \
+                    [[ "${arg}" == -* ]] && echo "global option"; } || echo action \
+                    ): '${arg}'"; return 1 ;;
+            esac
+        fi
+
+        case "${arg}" in
+            -L|--dereference[-_]links)
+                consume_val vars_ref[dereference_links] "${value}" i "1"; continue ;;
+            -l|--link) vars_ref[deploy_link]=1 vars_ref[sync_command]="ln"; continue ;;
+            --comm|--command) consume_val vars_ref[sync_command] "${value}" i ""; continue ;;
+            *) log error "Invalid argument: '${arg}'"; return 1 ;;
+        esac
+    done
+
+    is_flag_enabled "${vars_ref[dry_run]}" && \
+        vars_ref[sync_command]="echo ${vars_ref[sync_command]}"
+    is_flag_enabled "${vars_ref[force]}" && \
+        vars_ref[sync_flags]="${vars_ref[sync_flags]} -f"
+    is_flag_enabled "${vars_ref[dereference_links]}" && \
+        vars_ref[sync_flags]="${vars_ref[sync_flags]} -L"
+
+    # debug variable
+    log debug  "vars_ref[sync_command]       =  ${vars_ref[sync_command]}"
+    log debug  "vars_ref[sync_flags]         =  ${vars_ref[sync_flags]}"
+    log debug  "vars_ref[deploy_link]        =  ${vars_ref[deploy_link]}"
+    log debug  "vars_ref[sync]               =  ${vars_ref[sync]}"
+    log debug  "vars_ref[deploy]             =  ${vars_ref[deploy]}"
+    log debug  "vars_ref[force]              =  ${vars_ref[force]}"
+    log debug  "vars_ref[dereference_links]  =  ${vars_ref[dereference_links]}"
+    log debug  "vars_ref[dry_run]            =  ${vars_ref[dry_run]}"
+    log debug  "vars_ref[edit_config]        =  ${vars_ref[edit_config]}"
+    log debug  "LOGLEVEL                     =  $LOGLEVEL"
+}
+
+function main() {
+    local -a arguments
+    arguments=("${@}")
+
+    local -A vars=(
+        [sync_command]="rsync"
+        [sync_flags]="-a"
+        [deploy_link]=0
+        [sync]=0
+        [deploy]=0
+        [force]=0
+        [show_help]=0
+        [dereference_links]=0
+        [dry_run]=0
+        [edit_config]=0
+    )
+
+    parse_args arguments vars
+
+    mkdir -p "${D_CONFIG_DIR}"
+
+    is_flag_enabled "${vars[show_help]}" && { Usage; return 0; }
+
+    # source the config file
+    if [[ -r "${F_DECLARATIVE_MAPPING_CONF}" ]]; then
+        source "${F_DECLARATIVE_MAPPING_CONF}"
+    else
+        WriteDefaultConfig "${F_DECLARATIVE_MAPPING_CONF}" || return 1
+        source "${F_DECLARATIVE_MAPPING_CONF}"
+    fi
+
+    if is_flag_enabled "${vars[edit_config]}"; then
+        log info "editing config: '${F_DECLARATIVE_MAPPING_CONF}'"
+        "${EDITOR:-vim}" "${F_DECLARATIVE_MAPPING_CONF}"
+        return 0
+    fi
+
+    # array definition must exist in config
+    for dm in DM_DIRS DM_FILES; do
+        declare -p "${dm}" | grep -qw -- "declare -a ${dm}" || \
+    { log error "'${dm}' missing from config '${F_DECLARATIVE_MAPPING_CONF}'"; return 1; }
+    done
+
+    # fallback to 'cp' if no 'rsync'
+    command -v rsync &>/dev/null || \
+        { log warn "rsync not found falling back to 'cp'"; vars[sync_command]=cp; }
+
+    if is_flag_enabled "${vars[sync]}"; then
+        log info "action: sync (system -> repo), method: copy"
+        ActionDo vars "sync" || \
+            { log error "errors encountered while syncing"; return 1; }
+        log info "[complete] action: synchronize"
+    elif is_flag_enabled "${vars[deploy]}" && \
+            is_flag_enabled "${vars[deploy_link]}"; then
+        log info "action: deploy (repo -> system), method: symlink"
+        ActionDo vars "deploy_symlink" || \
+            { log error "errors encountered while deploying symlinks"; return 1; }
+        log info "[complete] action: deploy symlinks"
+    elif is_flag_enabled "${vars[deploy]}"; then
+        log info "action: deploy (repo -> system), method: copy"
+        ActionDo vars "deploy" || \
+            { log error "errors encountered while deploying"; return 1; }
+        log info "[complete] action: deploy"
+    else
+        log error "no action selected"
+    fi
+}
+
+main "${@}"
+

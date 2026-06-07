@@ -1,0 +1,1026 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+RED="\033[38;2;255;75;75m"
+GREEN="\033[38;2;138;230;81m"
+ORANGE="\033[38;2;255;170;10m"
+CMD_COL="\033[38;2;255;170;100m"
+NC="\033[0m"
+
+MSG=""
+FORCE=0
+
+function log() {
+    local type_="$1"; shift 1
+    local col="${CMD_COL}" nc="${NC}"
+    case "${type_}" in
+        info) col="${GREEN}" ;;
+        error) col="${RED}" ;;
+        beautify) printf '%b\n' "\n\n######################## ${*} ########################\n"; return 0 ;;
+    esac
+
+    printf '[%b%b%b]: %b\n' "${col}" "${type_}" "${nc}" "${*}"
+}
+
+command -v xbps-install &> /dev/null || {
+    log error "XBPS is missing in this system, this script is only for Void Linux"
+    exit 1
+}
+
+function XBPS_install() {
+    local msg="$1"
+    shift
+    local -a Install_Tool_list=("$@")
+    local -a xbps_cmd_args=( -y )
+
+    log beautify "${msg}"
+
+    log info "Packages will be installed: ${Install_Tool_list[*]}"
+
+    [[ "${#Install_Tool_list[@]}" -eq 0 ]] && return 1
+
+    [[ "$FORCE" -eq 1 ]] && xbps_cmd_args+=( -f )
+
+    if sudo xbps-install "${xbps_cmd_args[@]}" "${Install_Tool_list[@]}"; then
+        log info "Installed: '${Install_Tool_list[*]}'"
+    else
+        log error "Failed to install: '${Install_Tool_list[*]}'"
+    fi
+}
+
+function Usage() {
+    local n="${0##*/}"
+    cat << EOF
+    Usage:
+        Usage of script:
+            ${n} -i,--install [PACKAGE_GROUP|all]
+            ${n} -i,--install -s,--service=SERVICE1,SERVICE2,...
+        Available groups:
+            graphics:           drivers: (nvidia,amd), Compute APIs: (vulkan,opengl)
+            browsers:           qutebrowser, and opera
+            terminals:          foot, and alacritty
+            audio:              pipewire with pulse support
+            monitors:           System monitoring tools
+            utils:              Daily dev tools
+            adguard:            Host level adblocker
+            filemanagers:       vifm, yazi ...
+            ly*|login*          Login manager ly, sddm
+            nbfc*|note*         NoteBook fan control
+            font*|theme*        Fonts and themes
+            sway                Manual Tiling WM sway
+            misc                Some extra stuff
+            nvim|neovim         Neovim, and vim
+            *brew               Brew package manager
+            dev*                Dev tools only
+            prod*               Productivity multipliers
+            data*               Data base management utils (postgresql, mysql etc)
+            yt*                 Yt-dlp
+            hypr*               Dynamic Tiling WM hyprland
+            activity*|parental* Activity watch
+            locale              Setup locate default: en_US.UTF-8
+            other|extras        Other extra utils
+EOF
+}
+
+function Check_commands() {
+    local -a commands=("${@}")
+    for cmd in "${commands[@]}"; do
+        if ! command -v "${cmd}" &> /dev/null; then
+            log error "'${cmd}' command not found"; return 1
+        fi
+    done
+}
+
+function Check_deps() {
+    local -a pkgs=("$@")
+    for pkg in "${pkgs[@]}"; do
+        if ! xbps-query "${pkg}" &> /dev/null; then
+            if [[ "${FORCE}" -eq 0 ]];then
+                log warn "Failed to satisfy dependency '${pkg}'"
+                local yes_no; printf '%s' "Install '${pkg}' package y(es)|n(o) or q(uit)?: "
+                read -r -n1 yes_no; printf '\n'
+            fi
+            [[ "${yes_no}" =~ ^(Y|y)$ ]] || continue
+            sudo xbps-install -y "${pkg}"
+            continue
+            return 1
+        fi
+    done
+}
+
+function Move() {
+    local src="${1}" dest="${2}"
+    local perms="${3:-0755}"
+    local dest_dir="${dest%%/"${dest##*/}"}"
+    sudo mkdir -p "${dest_dir}"
+    sudo chown root:root "${dest_dir}"
+    sudo mv "${src}" "${dest}"
+    sudo chown root:root "${dest}"
+    sudo rm -f "${src}" &> /dev/null || true
+    sudo chmod "${perms}" "${dest}"
+}
+
+function Enable_service() {
+    local service="$1"
+    local service_dir="/var/service/"
+
+    if [[ -L "/var/service/${service}" ]]; then
+        log info "'${ORANGE}${service}${NC}' service already enabled, re-enabling"
+    fi
+
+    [[ -d "/etc/sv/$service" ]] || { log error "Service '${service}' not found in /etc/sv/"; return 1; }
+    [[ -L "/var/service" ]] || service_dir="/etc/runit/runsvdir/default/"
+    { sudo ln -sf "/etc/sv/${service}" "${service_dir}" && \
+        log info "service '${service}' enabled at boot"; }|| log error "Failed to enable service '${service}'"
+}
+
+function Downloader() {
+    local url="${1}"
+    local download_dir="${2}"
+    local program_name="${3}"
+    local output="${download_dir}/${program_name}"
+
+    log beautify "Downloading '${program_name}' at '${download_dir}/'"
+    sudo mkdir -p "${download_dir}"
+    if command -v wget &> /dev/null; then
+        log cmd_info "sudo wget -nv --show-progress --progress=bar:force --continue --output-document="${output}" ${url}"
+        sudo wget -nv --show-progress --progress=bar:force --continue --output-document="${output}" "${url}" || \
+            { log error "wget download method failed for '${url}'"; return 1; }
+    elif command -v curl &> /dev/null; then
+        log cmd_info "sudo curl -fSL --progress-bar ${url} -o ${output}"
+        sudo curl -fSL --progress-bar "${url}" -o "${output}" || \
+            { log error "curl download method failed for '${url}'"; return 1; }
+    else
+        log error "No curl or wget command found on your system"
+    fi
+}
+
+function Enable_pipewire_configs() {
+    local -a configs_dirs=(
+        "/usr/share/examples/wireplumber:/etc/pipewire/pipewire.conf.d"
+        "/usr/share/examples/pipewire:/etc/pipewire/pipewire.conf.d"
+        "/usr/share/alsa/alsa.conf.d:/etc/alsa/conf.d"
+    )
+    local IFS src dest
+
+    for config_dir_pair in "${configs_dirs[@]}"; do
+        IFS=$':' read -r src dest <<< "${config_dir_pair}"
+        if [[ -L "${dest}" ]]; then
+            log info "'${ORANGE}${dest}${NC}' already symlinked, skipping"
+            continue
+        fi
+        sudo mkdir -p "${dest}"
+        for file in "${src}"/*; do
+            sudo ln -sf "${file}" "${dest}/" && \
+                log info "Created symlink: '${file}' -> '${dest}/'"
+        done
+    done
+}
+
+function Install_AdGuardHome_runit_service() {
+    local service_name="${1}"
+    local install_dir="/usr/local/bin"
+    local adguard_config="/etc/adguardhome/${service_name}.yaml"
+    local work_dir="/var/lib/adguardhome"
+    local binary_path="${install_dir}/${service_name}"
+    local tmpfile=""
+    tmpfile="$(mktemp)"
+
+    log beautify "Installing AdGuardHome runit service"
+
+    sudo mkdir -p "${adguard_config%/*}" "${work_dir}"
+
+    if cat 1> "${tmpfile}" << EOF
+#!/usr/bin/sh
+
+exec 2>&1
+
+mkdir -p "${work_dir}"
+
+exec ${binary_path} --config "${adguard_config}" --work-dir "${work_dir}" --web-addr 127.0.0.1:4000
+
+EOF
+    then
+        log info "Installed '${service_name}' (/etc/sv/${service_name}/run) runit service"
+    else
+        log error "Failed to Install '${service_name}' (/etc/sv/${service_name}/run) runit service"
+        return 1
+    fi
+
+    Move "${tmpfile}" /etc/sv/"${service_name}/run"
+
+    tmpfile="$(mktemp)"
+    if cat 1> "${tmpfile}" << EOF
+#!/usr/bin/sh
+
+exec vlogger -t ${service_name} -p daemon
+
+EOF
+    then
+        Move "${tmpfile}" /etc/sv/"${service_name}"/log/run
+        log info "Installed '${service_name}' (/etc/sv/${service_name}/log/run) syslog service"
+    else
+        log error "Failed to install '${service_name}' (/etc/sv/${service_name}/log/run) syslog service"
+        return 1
+    fi
+
+    Enable_service "${service_name}"
+}
+
+function Install_AdGuardHome() {
+    local program_name="AdGuardHome"
+    local install_dir="${static_install_dir}" download_dir="/opt/tmp"
+    local install_symlink="/usr/local/bin/${program_name,,}"
+    local os="linux" cpu="amd64" channel="release" pkg_ext="tar.gz"
+    local pkg_name="${program_name}_${os}_${cpu}.${pkg_ext}"
+    local url="https://static.adtidy.org/adguardhome/${channel}/${pkg_name}"
+
+    sudo mkdir -p "${install_dir}" "${download_dir}"
+
+    if [[ -s "${install_dir}/${program_name}" ]] && [[ $FORCE -eq 0 ]]; then
+        local yes_no
+        printf '%s' "'${install_dir}/${program_name}' already exists, Reinstall it? y(es)|n(o)?: "
+        read -r -n1 -p "" yes_no; printf '\n'
+        if [[ "${yes_no}" =~ ^(N|n)$ ]]; then
+            # Install and enable AdGuardHome service
+            Install_AdGuardHome_runit_service "${program_name,,}"
+            return 0
+        fi
+    fi
+
+    Downloader "${url}" "${download_dir}" "${pkg_name}"
+
+    log beautify "Extacting '${download_dir}/${pkg_name}' to '${download_dir}/'"
+    if ! sudo tar --extract --file="${download_dir}/${pkg_name}" --directory="${download_dir}/" ; then
+        log error "Failed to extract content from '${download_dir}/${pkg_name}'"
+        return 1
+    fi
+    log beautify "Installing '${program_name}' to '${install_dir}'"
+    local program_path=""
+    program_path="$(sudo find ${download_dir}/ -type f -name "${program_name}")"
+    sudo mv "${program_path}" "${install_dir}/" && \
+        log info "'${program_name}' installed at '${install_dir}/'"
+    sudo chmod 0755 "${install_dir}/${program_name}"
+    sudo ln -sf "${install_dir}/${program_name}" "${install_symlink}" && \
+        log info "'${install_dir}/${program_name}' symlinked to -> '${install_symlink}'"
+    sudo rm -rf "${download_dir}"
+    # Install and enable AdGuardHome service
+    Install_AdGuardHome_runit_service "${program_name,,}"
+}
+
+function Install_nbfc_fancontrol_runit_service() {
+    local service_name="${1}"
+    local tmpfile
+    log beautify "Installing nbfc-linux fancontrol runit service"
+    tmpfile="$(mktemp)"
+    if cat 1> "${tmpfile}" << EOF
+#!/usr/bin/sh
+
+exec 2>&1
+
+# Notebook Fan control
+
+while [ ! -d /sys/class/thermal ]; do
+    sleep 0.4
+done
+
+exec /usr/bin/nbfc_service
+
+EOF
+    then
+        Move "${tmpfile}" /etc/sv/"${service_name}"/run
+        log info "Installed '${service_name}' (/etc/sv/${service_name}/run) runit service"
+    else
+        log error "Failed to install '${service_name}' (/etc/sv/${service_name}/run) runit service"
+        return 1
+    fi
+
+
+    tmpfile="$(mktemp)"
+    if cat 1> "${tmpfile}" << EOF
+#!/usr/bin/sh
+
+exec vlogger -t ${service_name} -p daemon
+
+EOF
+    then
+        Move "${tmpfile}" /etc/sv/"${service_name}"/log/run
+        log info "Installed '${service_name}' (/etc/sv/${service_name}/log/run) syslog service"
+    else
+        log error "Failed to install '${service_name}' (/etc/sv/${service_name}/log/run) syslog service"
+    fi
+}
+
+function SRC_build_nbfc_fancontrol() {
+    local url="https://github.com/nbfc-linux/nbfc-linux.git"
+    local clone_dir="$HOME/dev/repos/nbfc"
+    local -a deps=( gcc libcurl-devel )
+    Check_deps "${deps[@]}"
+    # if binary already exists just create and enable service
+    if command -v nbfc_service &> /dev/null && [[ $FORCE -eq 0 ]]; then
+        Install_nbfc_fancontrol_runit_service nbfc-linux && \
+            Enable_service nbfc-linux || return 1
+        return 0
+    fi
+
+    mkdir -p "${clone_dir}"
+    if [[ -d "${clone_dir}" ]]; then
+        cd "${clone_dir}" || { log error "failed to chdir to ${clone_dir}"; return 1; }
+        if git status --short &>/dev/null; then
+            git pull --rebase --depth=1 "${url}"
+        else
+            git clone --depth=1 "${url}" "${clone_dir}"
+        fi
+    else
+        git clone --depth=1 "${url}" "${clone_dir}"
+    fi
+
+    cd "${clone_dir}" || log error "Failed to chdir to '${clone_dir}'"
+    { ./autogen.sh && ./configure --prefix=/usr --sysconfdir=/etc && make && sudo make install; } || \
+        { log error "Failed to build nbfc-linux"; cd - &> /dev/null; return 1; }
+    cd - &> /dev/null
+    # Install and enable runit service
+    Install_nbfc_fancontrol_runit_service nbfc-linux && Enable_service nbfc-linux || return 1
+}
+
+function Install_ActivityWatch() {
+    local url="https://github.com/ActivityWatch/activitywatch/releases/latest/download/activitywatch-linux-x86_64.AppImage"
+    local appimage="aw.appimage"
+    local download_dir="/opt/tmp"
+    Downloader "${url}" "${download_dir}" "${appimage}"
+    sudo mkdir -p "/opt/appimage"
+    sudo mv "${download_dir}/${appimage}" "/opt/appimage/"
+    sudo rm -r "${download_dir}"
+    if [[ -s "/opt/appimage/${appimage}" ]]; then
+        sudo chown root:root "/opt/appimage/${appimage}"
+        sudo chmod 0755 "/opt/appimage/${appimage}"
+        log info "Successfully install activitywatch at '/opt/appimage/${appimage}'"
+    else
+        log error "Failed to download 'activitywatch'"; return 1
+    fi
+}
+
+function SRC_build_ly_loginmanager() {
+    local url="https://codeberg.org/fairyglade/ly.git"
+    local clone_dir="$HOME/dev/repos/ly"
+
+    # checks
+    Check_deps xorg pam-devel libxcb-devel
+    Check_commands zig || return 1
+
+    # clone repo
+    mkdir -p "${clone_dir}"
+    if [[ -d "${clone_dir}" ]]; then
+        cd "${clone_dir}" || { log error "failed to chdir to ${clone_dir}"; return 1; }
+        if git status --short &>/dev/null; then
+            git pull --rebase --depth=1 "${url}"
+        else
+            git clone --depth=1 "${url}" "${clone_dir}"
+        fi
+    else
+        git clone --depth=1 "${url}" "${clone_dir}"
+    fi
+
+    # build and install
+    cd "${clone_dir}" || log error "Failed to chdir to '${clone_dir}'"
+    sudo zig build installexe -Dinit_system=runit || \
+        { log error "Failed to build ly"; return 1; }
+
+    # Enable ly service
+    Enable_service ly
+
+    # Disable agetty/ngetty on tty2
+    local service_dir="/var/service"
+    [[ -L "/var/service" ]] || service_dir="/etc/runit/runsvdir/default/"
+    cd "${service_dir}" || { log error "failed to chdir to ${service_dir}"; return 1; }
+    if [[ -L ./tty2 ]]; then
+        { sudo rm ./"tty2" && log info "Disabled agetty on tty2"; } || \
+            { log error "Failed to disable agetty on tty2"; return 1; }
+    elif sudo sv status ngetty &>/dev/null; then
+        local tmpfile
+        tmpfile="$(mktemp)"
+        if cat 1> "${tmpfile}" << EOF
+OPTS="tty1 tty3 tty4 tty5 tty6"
+EOF
+        then
+            Move "${tmpfile}" /etc/sv/ngetty/conf 0644
+        fi
+    fi
+}
+
+function Install_VTconsole_font() {
+    local service_name="vtconsole-font"
+    local tmpfile
+    tmpfile="$(mktemp)"
+    log info "Installing vtconsole-font"
+    cat 1> "${tmpfile}" << EOF
+#!/bin/sh
+
+CONFIG="/etc/vtconsole.conf"
+VTs="/dev/tty[0-9]"
+FONT="ter-v24b"
+
+[ -r "\${CONFIG}" ] && . "\${CONFIG}"
+
+for tty in \$VTs; do
+    [ -c "\${tty}" ] || continue
+    setfont -C "\${tty}" "\${FONT}"
+done
+
+exec chpst -b "vtconsole-font: applied" pause
+
+EOF
+    Move "${tmpfile}" /etc/sv/"${service_name}"/run
+    Enable_service "${service_name}"
+}
+
+function Install_Zram() {
+    local service_name="${1}"
+    local tmpfile
+    log beautify "Installing zram swap runit service"
+    tmpfile="$(mktemp)"
+    if cat 1> "${tmpfile}" << EOF
+#!/bin/sh
+
+## Create zram swap at boot
+
+exec 2>&1
+
+log() {
+    _type="\${1}"; shift 1
+    printf '[%s]: %s\\n' "\${_type}" "\${*}"
+}
+
+create_zram() {
+    _dev="\${1}"
+    _size="\${2}"
+    _algo="\${3}"
+
+    if [ -b "\${_dev}" ]; then
+        log info "zram '\${_dev}' already exists"
+        log info "Resetting '\${_dev}'"
+        swapoff "\${_dev}"
+        zramctl --reset "\${_dev}"
+    fi
+    sudo rmmod zram
+    modprobe zram num_devices=1 && sleep 0.3
+    zramctl --size="\${_size}" --algorithm="\${_algo}" "\${_dev}"
+}
+
+## Global variables
+ZRAM_DEV="" SIZE="" ALGO=""
+
+ZRAM_DEV="\$(readlink -f "\${0}")"
+ZRAM_DEV="\${ZRAM_DEV%/*}"
+ZRAM_DEV="\${ZRAM_DEV##*/}"
+ZRAM_DEV="/dev/\${ZRAM_DEV##*/}"
+
+SIZE="1G"
+ALGO="zstd"
+
+## Wait for meminfo
+while [ ! -f /proc/meminfo ]; do sleep 0.4; done
+
+## 1/3 rd of RAM given to zram for RAM based swaping
+SIZE=\$( awk '/MemTotal:/ { mb = int( ( (\$2)/(1024) ) / 3 ); printf "%.4dMib\n", mb } ' /proc/meminfo )
+
+[ -z "\${SIZE}" ] && { log error "Couldn't size for zram"; exit 1; }
+
+## Create a zram device
+create_zram "\${ZRAM_DEV}" "\${SIZE}" "\${ALGO}" || \\
+    { log error "Failed to create '\${ZRAM_DEV}'" ;exit 1; }
+
+{ [ -z "\${ZRAM_DEV}" ] || [ ! -b "\${ZRAM_DEV}" ]; } && \\
+    { log error "Failed to set zram (size=\${SIZE})"; exit 1; }
+
+## Create swap
+# Clear filesystem UUID and create swap
+mkswap -U clear "\${ZRAM_DEV}"
+# Enable swap
+swapon -o pri=100,discard=once,pages "\${ZRAM_DEV}"
+
+log info "zram swap enabled: \${ZRAM_DEV} (\${SIZE}, \${ALGO})\n"
+
+exec chpst -b "zram swap (DEV='\${ZRAM_DEV}', SIZE='\${SIZE}', ALGO=\${ALGO})" pause
+
+EOF
+    then
+        Move "${tmpfile}" /etc/sv/"${service_name}"/run
+        log info "Installed '${service_name}' (/etc/sv/${service_name}/run) runit service"
+    else
+        log error "Failed to install '${service_name}' (/etc/sv/${service_name}/run) runit service"
+        return 1
+    fi
+
+
+    tmpfile="$(mktemp)"
+    if cat 1> "${tmpfile}" << EOF
+#!/usr/bin/sh
+
+exec vlogger -t ${service_name} -p daemon
+
+EOF
+    then
+        Move "${tmpfile}" /etc/sv/"${service_name}"/log/run
+        log info "Installed '${service_name}' (/etc/sv/${service_name}/log/run) syslog service"
+        Enable_service "${service_name}"
+    else
+        log error "Failed to install '${service_name}' (/etc/sv/${service_name}/log/run) syslog service"
+    fi
+}
+
+function Install_limactl() {
+    local version=""
+    version="$(curl -fsSL https://api.github.com/repos/lima-vm/lima/releases/latest | jq -r .tag_name)"
+    sudo -v
+    curl -f#SLC- "https://github.com/lima-vm/lima/releases/download/${version}/lima-${version:1}-$(uname -s)-$(uname -m).tar.gz" | sudo tar Cxzvm "/usr/local/"
+    curl -f#SLC- "https://github.com/lima-vm/lima/releases/download/${version}/lima-additional-guestagents-${version:1}-$(uname -s)-$(uname -m).tar.gz" | sudo tar Cxzvm "/usr/local/"
+}
+
+function Neovim_setup() {
+    Check_deps neovim nodejs
+    Check_commands npm node || return 1
+    local output_file="init.vim"
+    local nvim_dir="/etc/xdg/nvim"
+    local nvim_conf="${0%%/"${0##*/}"}/${output_file}"
+    [[ -f "${nvim_conf}" ]] || \
+        { log error "'${nvim_conf}' not found, make sure you are running this script as ./${0##*/}"; return 1; }
+    [[ -s "${nvim_dir}/${output_file}" ]] && \
+        { log error "A config already exists, saving new config as '${nvim_dir}/init_.vim'"; output_file="init_.vim"; }
+    sudo cp "${nvim_conf}" "${nvim_dir}/${output_file}"
+    log info "Updating vim-plug plugins"
+    sudo nvim --headless -c ':InstallPlug' -c ':PlugUpdate' -c ':q!' -c ':q!' || true
+    log info "Installing language completions for neovim"
+    nvim -c ':CocInstall coc-clangd coc-python coc-rls coc-java coc-html coc-css coc-tsserver'
+}
+
+function Install_graphics_tools() {
+    MSG="video graphics drivers (Nvidia + Amd)"
+    local -a XBPSPkgs=(
+        # Nvidia
+        nvidia nvidia-firmware nvidia-vaapi-driver
+        nv-codec-headers nv-codec-headers-32bit
+        nvidia-gtklibs nvidia-gtklibs-32bit
+        nvidia-libs nvidia-libs-32bit
+        # Amd
+        mesa linux-firmware-amd
+        # Video acceleration support
+        mesa-vaapi mesa-vdpau
+        # Vulkan support
+        mesa-vulkan-radeon mesa-vulkan-radeon-32bit
+        mesa-vulkan-overlay-layer
+        mesa-vulkan-overlay-layer-32bit
+        Vulkan-Tools Vulkan-Headers
+        vulkan-loader vulkan-loader-32bit
+        vkBasalt
+        linux-tools
+    )
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_extra_repos() {
+    MSG="add extra repos"
+    local -a XBPSPkgs=(
+        void-repo-nonfree
+        void-repo-multilib
+        void-repo-multilib-nonfree
+    )
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function locale-gen() {
+    local locale="${1}"
+    IFS=$'.' read -r lang enc <<< "${locale}"
+    log info "setting up locale"
+    sudo localedef -i "${lang}" -f "${enc}" "${lang}.${enc}"
+}
+
+function Install_brew_pkg_manager() {
+    log beautify "Installing brew package manager"
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+}
+
+function Install_yt_dlp() {
+    local program_name="yt-dlp"
+    local download_dir="/usr/bin"
+    local url="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+
+    Downloader "${url}" "${download_dir}" "${program_name}"
+    [[ -s "${download_dir}/${program_name}" ]] && sudo chmod 0755 "${download_dir}/${program_name}"
+}
+
+function Install_static_ffmpeg() {
+    local program_name="ffmpeg-static"
+    local download_dir="${static_install_dir}"
+    local url="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+    Downloader "${url}" "${download_dir}" "${program_name}"
+}
+
+function Install_browsers() {
+    MSG="web browsers"
+    local -a XBPSPkgs=(
+        qutebrowser python3-adblock
+        opera tor
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_terminals() {
+    MSG="terminal emulators"
+    local -a XBPSPkgs=(
+        alacritty foot xterm
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_Audio() {
+    MSG="audio drivers and utils"
+    local -a XBPSPkgs=(
+        alsa-firmware alsa-tools alsa-utils
+        pipewire alsa-pipewire libjack-pipewire
+        pavucontrol cava elisa mpd rtkit
+        easyeffects calf lsp-plugins
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+    Enable_service rtkit
+    Enable_pipewire_configs
+}
+
+function Install_monitors() {
+    MSG="network monitoring tools"
+    local -a XBPSPkgs=(
+        htop iftop btop nmon nvtop
+        powertop tlp
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+    Enable_service tlp
+}
+
+function DataBase_management() {
+    MSG="database management tools"
+    local -a XBPSPkgs=(
+        postgresql mysql
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_dev_tools() {
+    MSG="dev build tools"
+    local -a XBPSPkgs=(
+        # development tools
+        base-devel
+        nasm patchelf
+        libao libmpg123
+        go zig gcc clang # compilers
+        make cmake meson ninja premake5 # Build systems
+        lldb gdb llvm valgrind perf strace # debuggers
+        boost boost-devel # portable C++ libraries
+        clang-tools-extra # for clangd
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_term_filemanagers() {
+    MSG="terminal file managers"
+    local -a XBPSPkgs=(
+        yazi vifm ranger nautilus dolphin konsole
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_qtile_setup() {
+    MSG="install Qtile"
+    local -a XBPSPkgs=(
+        qtile qtile-wayland
+        python3-dbus-fast # for Mpris2 widget
+        swayidle xinit swww
+        wayland xorg-server-xwayland xorg-server
+        grim slurp wl-clipboard wf-recorder
+        fuzzel
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_sway_setup() {
+    MSG="install Sway"
+    local -a XBPSPkgs=(
+        sway swayidle swaylock xinit swww
+        wayland xorg-server-xwayland xorg-server
+        Waybar grim slurp wl-clipboard wf-recorder
+        fuzzel autotiling okular
+        # hyprlock
+        socat # unix socket
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_hyprland() {
+    local hyprland_repo="/etc/xbps.d/hyprland-void.conf"
+    local repo_url="repository=https://raw.githubusercontent.com/Makrennel/hyprland-void/repository-x86_64-glibc"
+    log beautify "Hyprland Setup"
+    sudo mkdir -p "${hyprland_repo%%/"${hyprland_repo##*/}"}"
+    printf '%s\n' "${repo_url}" | sudo tee "${hyprland_repo}" &> /dev/null
+    log info "Updating and adding hyprland repo"
+    sudo xbps-install -S
+    MSG="hyprland"
+    local -a XBPSPkgs=(
+        hyprland hyprland-qtutils
+        hyprland-qt-support hyprland-protocols
+        xdg-desktop-portal-hyprland swww
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_fonts_and_themes() {
+    local -a XBPSPkgs=(
+        font-adobe-source-code-pro source-sans-pro
+        font-awesome font-awesome5 font-awesome6 font-firacode font-hack-ttf
+        noto-fonts-emoji noto-fonts-ttf noto-fonts-cjk terminus-font
+        qt6ct breeze-gtk breeze-qt6 # theme
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_productivity() {
+    MSG="graphics productivity"
+    local -a XBPSPkgs=(
+        blender krita gimp libreoffice-base
+        kdenlive obs sublime-text4
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_QEMU() {
+    MSG="QEMU"
+    local -a XBPSPkgs=(
+        qemu-system-amd64 qemu-img qemu-doc
+        qemu-img
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_misc_tools() {
+    MSG="miscellaneous tools"
+    local -a XBPSPkgs=(
+        apache nginx
+        acpid dhclient inxi
+        docker vim git xorg
+        xorg-server xorg-server-xwayland
+        feh imv mpv mpv-mpris vlc
+        wlr-randr pastel
+        kclock
+        guvcview
+        shellcheck
+        vsv sv-helper # runit helpers
+        simple-mtpfs
+        cpupower
+        # Networking tools
+        net-tools
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+
+    # enable services
+    # Enable_service acpid
+    Enable_service dbus
+    Enable_service udevd
+
+    # Enable mpris support for mpv
+    local library_path="/usr/lib/mpv-mpris"
+    local mpv_mpris_path="/etc/mpv/scripts/"
+    sudo mkdir -p "${mpv_mpris_path}"
+    sudo ln -sf "${library_path}"/mpris.so "${mpv_mpris_path}/"
+}
+
+function Install_pentest_and_sec() {
+    MSG="pentest and security utils"
+    local -a XBPSPkgs=(
+        nmap metasploit hydra john sqlmap
+        nikto dirb gobuster ffuf
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+}
+
+function Install_Greeter() {
+    MSG="greeter"
+    local -a XBPSPkgs=(
+        greetd # greeter daemon
+        tuigreet # TUI UI
+        fbterm
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+
+    # greetd + tuigreet setup
+
+    local greetd_file="/etc/greetd/config.toml"
+
+    sudo mkdir -p "${greetd_file%/*}"
+
+sudo tee "${greetd_file}" &> /dev/null << EOF
+[terminal]
+vt = next
+
+[default_session]
+command = "tuigreet --time --asterisks --user-menu --remember --remember-user-session --sessions '/usr/share/wayland-sessions' --xsessions '/usr/share/xsessions' --power-shutdown 'loginctl poweroff' --power-reboot 'loginctl reboot' --theme dark --cmd sway"
+
+user = "_greeter"
+
+EOF
+
+    # Enable_service greetd
+    log info "to enable greetd: sudo ln -s /etc/sv/greetd /var/service/"
+}
+
+function Install_utils() {
+    MSG="necessary utils"
+    local -a XBPSPkgs=(
+        zip brightnessctl dust gdu tree procs firejail
+        tmux tmate rsync dnsmasq hostapd polkit elogind nftables
+        zsh zsh-syntax-highlighting bash-completion openvpn zbar cronie zstd
+        bat eza fzf jq lesspipe lsd micro ncdu neovim nodejs ripgrep
+        fuse-sshfs lsof rsyslog plymouth man-db mlocate ngetty
+        xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk
+        chafa numactl fbterm frp cryptsetup jless
+        filelight 7zip
+        keypunch fd
+        trippy
+        vmpk # virtual piano
+        spek-x sonic-visualiser # audio visualizers
+        cutter # a advanced debugger/disassembler
+        man-pages-devel man-pages-posix # docs for C and POSIX
+        libwebp-tools # cwewp
+        ImageMagick NetworkManager network-manager-applet # Network Manager
+        wireless_tools # for iwlist
+        tldr # simple summary of commands
+        bind-utils # Dig
+        chrony # time
+        mako # Notification daemon
+        exfatprogs exfat-utils # exfat utils
+        e2fsprogs # ext2/ext3/ext4 (default linux)
+        ntfs-3g   # ntfs support
+        dosfstools # fat32
+    )
+
+    XBPS_install "${MSG}" "${XBPSPkgs[@]}" || \
+        { log error "failed to install '${MSG}' packages"; exit 1; }
+
+    sudo touch /etc/nftables.conf
+    Enable_service NetworkManager
+    Enable_service elogind
+    Enable_service polkitd
+    Enable_service rsyslogd
+    Enable_service crond
+    Enable_service ngetty
+    Enable_service chronyd && sudo chronyc makestep
+    Enable_service nftables
+}
+
+function Install_service() {
+    local service_list="${1}"
+    local service=""
+
+    [[ -n "${service_list}" ]] || { log error "No service given to install"; return 1; }
+
+    IFS=$',' read -a services <<< "${service_list}"
+
+    for service in "${services[@]}"; do
+        case "${service}" in
+            nbfc*) Install_nbfc_fancontrol_runit_service "nbfc-linux" ;;
+            adguard*) Install_AdGuardHome_runit_service "adguardhome" ;;
+            zram*) Install_Zram "zram0" ;;
+        esac
+    done
+}
+
+function main() {
+    local -a args=("${@}")
+    local -g static_install_dir="/opt/static"
+    local -g install=0
+    local -i update_system=1
+    local install_service_name=""
+
+    local arg="" value=""
+    for ((i=0;i<${#args[@]};i++)); do
+        arg="${args[$i]:-""}"
+        [[ $i -lt ${#args[@]} ]] && value="${args[$((i+1))]:-""}"
+        if [[ "${arg}" == *=* ]]; then
+            IFS=$'=' read -r arg value <<< "${arg}"
+            [[ -n "${value}" ]] || { log error "'${arg}' requires a value"; return 1; }
+        fi
+        if [[ "${arg}" == -* ]]; then
+            case "${arg}" in
+                -f|-*force) FORCE=1 ;;
+                -i|-*install) install=1 ;;
+                -s|-*service) install_service_name="${value}" ;;
+                --no[-_]update|--skip[-_]update) update_system=0 ;;
+                -h|--help) Usage; exit 0 ;;
+                *) log error "Unknown arg: '${arg}'" ;;
+            esac
+        fi
+    done
+
+    [[ $install -eq 1 ]] || { log error "Use --install flag for install"; return 1; }
+    [[ -n "${install_service_name}" ]] && \
+        { Install_service "${install_service_name}"; return 0; }
+
+    if [[ "$update_system" -eq 1 ]]; then
+        log beautify "system update"
+        sudo xbps-install -Su
+    fi
+
+    for ((i=0;i<${#args[@]};i++)); do
+        arg="${args[$i]:-""}"
+        case "${arg}" in
+            graphics) Install_graphics_tools ;;
+            browsers) Install_browsers ;;
+            terminals) Install_terminals ;;
+            audio) Install_Audio ;;
+            monitors) Install_monitors ;;
+            utils) Install_utils ;;
+            adguard*) Install_AdGuardHome ;;
+            filemanagers) Install_term_filemanagers ;;
+            ly*|login*) SRC_build_ly_loginmanager ;;
+            nbfc*|note*) SRC_build_nbfc_fancontrol ;;
+            font*|theme*) Install_fonts_and_themes ;;
+            sway) Install_sway_setup ;;
+            misc) Install_misc_tools ;;
+            nvim|neovim) Neovim_setup ;;
+	        *brew) Install_brew_pkg_manager ;;
+            dev*) Install_dev_tools ;;
+            prod*) Install_productivity ;;
+            data*) DataBase_management ;;
+            yt*) Install_yt_dlp ;;
+            hypr*) Install_hyprland ;;
+            lima*) Install_limactl ;;
+            activity*|parental*) Install_ActivityWatch ;;
+            zram[0-9]*) Install_Zram "${arg}" ;;
+            locale) locale-gen "en_US.UTF-8" ;;
+            *console[_-]font) Install_VTconsole_font ;;
+            other|extras)
+                Install_extras
+                Install_productivity
+                Install_hyprland
+                ;;
+            all|essential*)
+                Install_extra_repos
+                Install_graphics_tools
+                Install_browsers
+                Install_terminals
+                Install_Audio
+                Install_monitors
+                Install_dev_tools
+                Install_utils
+                Install_term_filemanagers
+                Install_sway_setup
+                Install_misc_tools
+                Install_Zram "zram0"
+                Install_fonts_and_themes
+                Install_AdGuardHome
+                Install_yt_dlp
+                # Install_brew_pkg_manager
+                Install_VTconsole_font
+                # SRC_build_ly_loginmanager
+                SRC_build_nbfc_fancontrol
+                ;;
+            [A-Za-z]*) log error "Unknown module: ${arg}" ;;
+        esac
+    done
+    log beautify "Complete!"
+}
+
+main "$@"
+

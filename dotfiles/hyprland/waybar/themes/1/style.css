@@ -1,0 +1,405 @@
+/* ========================== */
+/* style.css config for waybar */
+/* ========================== */
+
+/* Predefined colors */
+@define-color bg_main            rgba(43, 48, 59, 0.8);
+@define-color text_main          #FFFFFF;                 /* Default text in waybar */
+@define-color text_dim           #888888;                 /* Inactive/dim text (separators) */
+@define-color accent_purple      #8810DD;                 /* Hover accents */
+@define-color focused_shadow     #222222;                 /* Focused borders */
+@define-color urgent_bg          #EB4D4B;                 /* Urgent alerts */
+@define-color cava_purple        #AA00FF;                 /* Cava animation */
+@define-color launcher_fg        #FFFFAA;                 /* Launcher text */
+@define-color launcher_bg        rgba(80, 80, 180, 0.2);  /* Launcher bg */
+@define-color battery_good       #FFBBBB;                 /* Battery > good*/
+@define-color battery_warning    #FF2222;                 /* Battery warning */
+@define-color battery_critical   #F53C3C;                 /* Battery critical bg */
+@define-color battery_blink_from rgba(224, 48, 42, 1);
+@define-color battery_blink_to   rgba(222, 95, 122, 1);
+@define-color pp_performance     #F53C3C;                 /* Power profiles */
+@define-color pp_balanced        #2980B9;
+@define-color pp_saver           #2ECC71;
+@define-color pp_saver_text      #000000;
+@define-color clock_fg           #CCC899;                 /* Module-specific */
+@define-color now_playing_active #AAAAAA;
+@define-color cpu_fg             #9DC4FF;
+@define-color memory_fg          #DDFF2F;
+@define-color backlight_fg       #CCC899;
+@define-color network_fg         #CCC899;
+@define-color network_disconnected #FF6347;
+@define-color network_disabled   #FF8C00;
+@define-color pulseaudio_fg      #CCC899;
+@define-color pulseaudio_hover   #AAAAAA;
+@define-color temperature_fg     #FFC26C;
+@define-color temperature_warning #FFA600;
+@define-color temperature_critical #FF0000;
+@define-color tray_attention     #EB4D4B;
+@define-color language_fg        #ffffd0;
+@define-color scratchpad_fg      #FFAAFF;
+@define-color scratchpad_bg      rgba(0, 0, 0, 0.6);
+@define-color privacy_screenshare #CF5700;
+@define-color privacy_audio_in   #1CA000;
+@define-color privacy_audio_out  #0069D4;
+@define-color gtk_menu_text      rgba(255, 255, 255, 1);
+@define-color gtk_menu_bg        rgba(10, 10, 10, 1);
+
+/* ========================= */
+/* Global reset & typography */
+/* ========================= */
+
+* {
+    /* otf-font-awesome required for icons */
+    border: none;
+    border-radius: 4px;
+    font-family: "SourceCodePro Bold", "SourceSansPro Semibold", "DejaVu Sans";
+    font-size: 14px;
+    color: inherit;
+    box-shadow: inset 0px 0px 2px 2px transparent; /* Clean base shadow */
+    transition: all 0.2s ease; /* Smooth hovers */
+    margin: 0px 3px;
+}
+
+/* ============= */
+/* Bar container */
+/* ============= */
+
+window#waybar {
+    background-color: @bg_main;
+    color: @text_main;
+    transition-property: background-color;
+    transition-duration: 0.5s;
+}
+
+window#waybar.hidden {
+    color: #000000;
+    opacity: 0.4;
+}
+
+window#waybar.empty,
+window#waybar.solo {
+    background-color: transparent;
+}
+
+window#waybar.termite { background-color: #3F3F3F; }
+window#waybar.chromium { background-color: #000000; border: none; }
+
+/* =================== */
+/* Workspaces module */
+/* =================== */
+
+#workspaces {
+    box-shadow: inset 0px 0px 2px 2px rgba(0, 0, 0, 0);
+}
+
+.modules-left > widget:first-child > #workspaces { margin-left: 0; }
+.modules-right > widget:last-child > #workspaces { margin-right: 0; }
+
+#workspaces button {
+    transition: none;
+    padding: 0px 3px;
+    color: @text_dim;
+    border-radius: 3px;
+    box-shadow: inset 0px 0px 2px 2px transparent;
+}
+
+#workspaces button:hover {
+    background: rgba(1, 1, 1, 0.2);
+    box-shadow: inherit;
+}
+
+#workspaces button.focused {
+    color: @text_dim;
+    box-shadow: inset 0px 0px 2px 2px @focused_shadow;
+}
+
+#workspaces button.urgent {
+    background-color: @urgent_bg;
+}
+
+/* ========================= */
+/* Generic buttons & Hovers  */
+/* ========================= */
+
+button {
+    box-shadow: inset 0px 0px transparent;
+    border: none;
+    margin: 0px 4px;
+}
+
+button:hover {
+    background: inherit;
+    box-shadow: inset 0px 0px 2px 2px @accent_purple;
+}
+
+label:focus {
+    background-color: #000000;
+}
+
+/* ================================= */
+/* Waybar supported GTK style menus */
+/* ================================= */
+
+menu {
+    color: @gtk_menu_text;
+    background-color: @gtk_menu_bg;
+    border-radius: 12px;
+    border: 1px solid #5E548E;
+    padding: 8px 0px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+menuitem {
+    transition: none;
+    margin: 4px 0px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    background-color: transparent;
+}
+
+menuitem:hover {
+    background-color: #483475;
+    transition: none;
+    color: #FFFFFF;
+    box-shadow: 0px 0px 4px rgba(160, 247, 216, 0.5);
+    border: 0px solid #A0F7D8;
+}
+
+menuitem:disabled {
+    color: #555555;
+    transition: none;
+    opacity: 0.6;
+    background-color: transparent;
+}
+
+/* =============== */
+/* Custom modules  */
+/* =============== */
+
+#custom-seperator { color: @text_dim; }
+
+#custom-launcher {
+    color: @launcher_fg;
+    background-color: @launcher_bg;
+    border-radius: 8px;
+    transition-property: background-color;
+}
+
+#custom-now_playing.inactive { color: transparent; }
+#custom-now_playing.active {
+    color: @now_playing_active;
+    min-width: 10px;
+}
+
+/* Cava visualizer animation */
+#custom-cava.active {
+    color: @cava_purple;
+    animation-name: cava_Blink;
+    animation-duration: 4s;
+    animation-timing-function: ease;
+    animation-iteration-count: infinite;
+    animation-direction: reverse;
+}
+
+#custom-cava.inactive {
+    opacity: 1;
+    color: transparent;
+}
+
+@keyframes cava_Blink {
+    0%   { color: @cava_purple; opacity: 1; }
+    100% { color: @cava_purple; opacity: 1; }
+}
+
+/* ===================== */
+/* Clock & System stats  */
+/* ===================== */
+
+#clock { color: @clock_fg; font-weight: 100; }
+
+#cpu { color: @cpu_fg; font-weight: 100; }
+
+#memory { color: @memory_fg; font-weight: 100; }
+
+#disk { background-color: #964B00; }
+
+#backlight { color: @backlight_fg; font-weight: 100; }
+
+#network {
+    color: @network_fg;
+    font-weight: 100;
+    min-width: 60px;
+}
+
+#network.disconnected { color: @network_disconnected; }
+#network.disabled { color: @network_disabled; }
+
+#temperature {
+    color: @temperature_fg;
+    font-weight: 100;
+}
+
+#temperature.warning { color: @temperature_warning; }
+#temperature.critical { color: @temperature_critical; }
+
+/* ============== */
+/* Audio modules  */
+/* ============== */
+
+#pulseaudio {
+    color: @pulseaudio_fg;
+}
+
+#pulseaudio:hover { color: @pulseaudio_hover; }
+#pulseaudio.muted {
+    color: #000000;
+    font-weight: bolder;
+}
+
+#wireplumber {
+    background-color: #FFF0F5;
+    color: #000000;
+}
+
+#wireplumber.muted { background-color: #F53C3C; }
+
+#custom-media {
+    background-color: #66CC99;
+    color: #2A5C45;
+    min-width: 100px;
+}
+
+#custom-media.custom-spotify { background-color: #66CC99; }
+#custom-media.custom-vlc { background-color: #FFA000; }
+
+/* =============== */
+/* Battery module  */
+/* =============== */
+
+#battery { color: #AAFFAA; } /* Base green */
+
+#battery.good { color: @battery_good; }
+
+#battery.warning { color: @battery_warning; }
+
+#battery.charging,
+#battery.plugged { color: @text_main; }
+
+#battery.critical:not(.charging) {
+    color: @battery_warning;
+    background-color: @battery_critical;
+    padding: 0px 5px;
+    margin: 4px;
+    min-width: 16px;
+    border-radius: 8%;
+    animation-name: blink;
+    animation-duration: 0.8s;
+    animation-timing-function: steps(12);
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+}
+
+@keyframes blink {
+    0%   { color: @battery_blink_from; opacity: 1; background-color: transparent; }
+    100% { color: @battery_blink_to;   opacity: 1; background-color: transparent; }
+}
+
+/* =============== */
+/* Power profiles  */
+/* =============== */
+
+#power-profiles-daemon { padding-right: 15px; }
+
+#power-profiles-daemon.performance {
+    color: @text_main;
+    background-color: @pp_performance;
+}
+
+#power-profiles-daemon.balanced {
+    color: @text_main;
+    background-color: @pp_balanced;
+}
+
+#power-profiles-daemon.power-saver {
+    color: @pp_saver_text;
+    background-color: @pp_saver;
+}
+
+/* =============== */
+/* Tray & Privacy  */
+/* =============== */
+
+#tray { background-color: transparent; }
+
+#tray > .passive { -gtk-icon-effect: dim; }
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+    background-color: @tray_attention;
+}
+
+#privacy { padding: 0; }
+
+#privacy-item {
+    padding: 0px 3px;
+    color: white;
+}
+
+#privacy-item.screenshare { background-color: @privacy_screenshare; }
+#privacy-item.audio-in    { background-color: @privacy_audio_in; }
+#privacy-item.audio-out   { background-color: @privacy_audio_out; }
+
+/* ==================================================== */
+/* Misc modules (idle, language, keyboard, scratchpad)  */
+/* ==================================================== */
+
+#idle_inhibitor { background-color: #2D3436; }
+#idle_inhibitor.activated {
+    background-color: #ECF0F1;
+    color: #2D3436;
+}
+
+#language {
+    color: @language_fg;
+    font-weight: bolder;
+    padding: 0px 8px;
+    min-width: 18px;
+    margin: 4px;
+}
+
+#keyboard-state {
+    color: @clock_fg;
+    margin: 4px;
+    border-radius: 8%;
+}
+
+#keyboard-state > label {
+    color: #666666;
+    padding: 0px 3px;
+}
+
+#keyboard-state > label.locked {
+    color: #AAAAAA;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+#scratchpad {
+    color: @scratchpad_fg;
+    background: @scratchpad_bg;
+}
+
+#scratchpad.empty {
+    color: @scratchpad_fg;
+    background: @scratchpad_bg;
+}
+
+#mpris.playing {
+    color: @now_playing_active;
+    min-width: 10px;
+}
+
+#mpris.paused {
+    color: transparent;
+    background: transparent;
+}
+

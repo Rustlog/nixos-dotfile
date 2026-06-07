@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+
+builtin set -euo pipefail
+
+NO_COLOR=0
+
+# Pretty logging
+function log() {
+    local _type="${1}"; shift
+    local _color="" _t=""
+    if [[ $NO_COLOR -eq 0 ]]; then
+        local -g _info_color="\033[38;2;85;255;126m" \
+            _warn_color="\033[38;2;255;170;10m" \
+            _error_color="\033[38;2;244;29;31m" \
+            _fatal_color="\033[5m\033[38;2;255;0;0m" \
+            _other_color="\033[38;2;251;255;208m" \
+            _nc="\033[0m"
+    else
+        _info_color="" _warn_color="" _error_color=""
+        _fatal_color="" _other_color="" _nc=""
+    fi
+    case "${_type}" in
+        info) _color="${_info_color:-}" _t="*"    ;;
+        warn) _color="${_warn_color:-}" _t="^"    ;;
+        error) _color="${_error_color:-}" _t="!"  ;;
+        fatal) _color="${_fatal_color:-}" _t="#"  ;;
+        *) _color="${_other_color-""}" _t=""        ;;
+    esac
+
+    printf "[%b%s%b%s]: %b\n" \
+        "${_color}" "${_type}" "${_nc}" "${_t}" "${*}"
+}
+
+# HELPER function -- Variable is not empty
+function require_var() {
+    local var="${1:-}" _type="${2:-}" msg="${3:-}"
+    [[ -n "${var}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Variable is empty
+function is_var_empty() {
+    local var="${1:-}" _type="${2:-}" msg="${3:-}"
+    [[ -z "${var}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check file existance
+function require_file() {
+    local file="${1}" _type="${2:-}" msg="${3:-}"
+    [[ -s "${file}" && -f "${file}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check regular file existance
+function require_regular_file() {
+    local file="${1}" _type="${2:-}" msg="${3:-}"
+    [[ -f "${file}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check directory existance
+function require_dir() {
+    local dir="${1}" _type="${2:-}" msg="${3:-}"
+    [[ -d "${dir}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check enabled state
+function is_flag_enabled() {
+    local -i var=${1}
+    [[ "$var" -eq 1 ]] && return 0
+    return 1
+}
+
+# HELPER function -- Check disabled state
+function is_flag_disabled() {
+    local -i var=${1}
+    [[ "$var" -eq 0 ]] && return 0
+    return 1
+}
+
+# HELPER function -- Ensure directory exists
+function create_dir() {
+    local dir="${1}" name="${2:-This}" msg="${3:-}"
+    [[ -n "${msg}" ]] && log info "${msg}"
+    if ! require_dir "${dir}"; then
+        log warn "${name} '${dir}' does not exist"
+        if sudo mkdir -p "${dir}"; then
+            log info "Successully created '${dir}'"
+        else
+            log error "Failed to create '${dir}'"
+        fi
+    fi
+}
+
+# HELPER function -- Move src (file) to dest (file)
+# or install dest file with mode and perms
+function Install() {
+    local f_src_file="${1:-}" f_dest_file="${2:-}"
+    local owners="${3:-root:root}" mode="${4:-644}"
+    local info_msg="${5:-}"
+    require_var "${f_dest_file}" error \
+        "Cannot procceed to install 'f_dest_file' var is empty"
+    sudo mkdir -p "${f_dest_file%/*}"
+    [[ -f "${f_dest_file}" ]] || sudo touch "${f_dest_file}"
+    [[ -n "${f_src_file}" ]] && sudo mv "${f_src_file}" "${f_dest_file}"
+    if ! sudo chown "${owners}" "${f_dest_file}" && \
+        sudo chmod "${mode}" "${f_dest_file}"; then
+        return 1
+    fi
+    [[ -n "${info_msg}" ]] && { log info "${info_msg}"; }
+    return 0
+}
+
+function main() {
+    local empty_var=""
+    local some_value="something"
+    local non_existant_dir="${HOME}/dev/log_dir"
+    local non_existant_file="${non_existant_dir}/log_file"
+    local -i flag_on=1 flag_off=0
+
+    is_var_empty "${empty_var}" && \
+        log warn "'empty_var' is empty"
+    require_var "${some_value}" && \
+        log info "some_value = '${some_value}'"
+    require_file "${non_existant_file}" || \
+        log warn "'non_existant_file (${non_existant_file})' does not exist"
+    require_dir "${non_existant_dir}" || \
+        log warn "'non_existant_dir (${non_existant_dir})' does not exist"
+    is_flag_enabled "$flag_on" && \
+        log info "'flag_on' is enabled"
+    is_flag_disabled "$flag_off" && \
+        log warn "'flag_off' is disabled"
+}
+
+main "${@}"
+

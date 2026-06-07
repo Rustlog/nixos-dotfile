@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+current_user=$(whoami)
+readarray -t current_users < <(ps -eo user= | sort -u)
+readarray -t valid_users < <(getent passwd | awk -F':' '!/nologin|daemon/ {print $1}')
+
+for user in "${valid_users[@]}"; do
+    if [[ "$user" == "$current_user" ]]; then
+        echo "$user (you)"
+    else
+        for u in "${current_users[@]}"; do
+            [[ "$user" == "$u" ]] && echo "$u"
+        done
+    fi
+done
+
+exit 0
+

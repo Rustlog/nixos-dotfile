@@ -1,0 +1,340 @@
+#!/usr/bin/env bash
+
+RED="\033[38;2;255;75;75m"
+GREEN="\033[38;2;138;230;81m"
+ORANGE="\033[38;2;255;170;10m"
+NC="\033[0m"
+
+AUR=""
+MSG=""
+
+function LOG() {
+    local type_="$1"
+    shift
+    case "$type_" in
+        info)
+            echo -e "[${GREEN}${type_}${NC}]: $@"
+            ;;
+        error)
+            echo -e "[${RED}${type_}${NC}]: $@"
+            ;;
+        beautify)
+            echo -e "###### $@ ######"
+            ;;
+    esac
+}
+
+command -v pacman &> /dev/null || {
+    LOG error "Nah man, You need a pacman first."
+    exit 1
+}
+
+command -v yay &> /dev/null && AUR="yay"
+command -v paru &> /dev/null && AUR="paru"
+[[ -z "${AUR}" ]] && LOG error "No aur helper Found"
+
+function Check_command() {
+    local package_manager="$1"
+    local tool="$2"
+    if $package_manager -Qq $tool &> /dev/null; then
+        return 0
+    elif command -v $tool &> /dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function Pacman_install() {
+    local msg="$1"
+    shift
+    local -a tools=("$@")
+    local -a Install_Tool_list=()
+
+    LOG beautify "${msg}"
+    for tool in "${tools[@]}"; do
+        if Check_command "pacman" "$tool"; then
+            LOG info "'${ORANGE}${tool}${NC}' already installed, skipping"
+        else
+            Install_Tool_list+=("${tool}")
+        fi
+    done
+
+    LOG info "Packages will be installed: ${Install_Tool_list[@]}"
+
+    [[ ${#Install_Tool_list[@]} -eq 0 ]] && return 1
+
+    sudo pacman -S "${Install_Tool_list[@]}" --needed --noconfirm && \
+        LOG info "Installed: '${Install_Tool_list[@]}'"
+}
+
+function AUR_Install() {
+    [[ -z "${AUR}" ]] && return 1
+    local msg="$1"
+    shift
+    local -a tools=("$@")
+    local -a Install_Tool_list=()
+
+    LOG beautify "${msg}"
+    for tool in "${tools[@]}"; do
+        if Check_command "$AUR" "$tool"; then
+            LOG info "'${ORANGE}${tool}${NC}' already installed, skipping"
+        else
+            Install_Tool_list+=("${tool}")
+        fi
+    done
+
+    LOG info "Packages will be installed: ${Install_Tool_list[@]}"
+
+    [[ ${#Install_Tool_list[@]} -eq 0 ]] && return 1
+
+    ${AUR} -S "${Install_Tool_list[@]}" --needed --noconfirm && \
+        LOG info "Installed: '${Install_Tool_list[@]}'"
+}
+
+
+# Install Sections #
+
+function Install_graphics_tools() {
+    MSG="Graphics related tools"
+    local -a PacmanPkgs=(
+        nvidia nvidia-utils nvidia-prime amd-ucode
+        vulkan-devel vulkan-tools vulkan-icd-loader lib32-vulkan-icd-loader
+        xf86-video-amdgpu lib32-vulkan-radeon
+        # xdg-desktop-portal-X X=wlr for sway, X=hyprland for hyprland
+        xdg-desktop-portal xdg-desktop-portal-wlr
+        pastel wlr-randr
+    )
+    Pacman_install "${MSG}" "${PacmanPkgs[@]}"
+}
+
+function Install_browsers() {
+    MSG="Browsers"
+    local -a PacmanPkgs=(
+    qutebrowser
+    tor torbrowser-launcher
+    vivaldi vivaldi-ffmpeg-codecs
+    )
+    Pacman_install "${MSG}" "${PacmanPkgs[@]}"
+    AUR_Install "${MSG}" brave-bin google-chrome zen-browser
+}
+
+
+function Install_security() {
+    MSG="Security"
+    local -a PacmanPkgs=(
+        nftables gufw # newer firewall
+        adguardhome # system-wide ad-blocker
+        goaccess netdata # monitoring tool
+    )
+    Pacman_install "${MSG}" "${PacmanPkgs[@]}"
+    AUR_Install "${MSG}" ntopng
+}
+
+function Install_terminals() {
+    MSG="Terminal emulators"
+    Pacman_install "${MSG}" foot alacritty kitty konsole
+}
+
+
+function Install_Audio() {
+    MSG="Terminal Audio and Video drivers"
+    local -a PacmanPkgs=(
+        alsa-lib alsa-tools alsa-utils alsa-firmware
+        pipewire pipewire-alsa pipewire-jack pipewire-pulse
+        pipewire-session-manager
+    )
+    Pacman_install "${MSG}" "${PacmanPkgs[@]}"
+}
+
+function Install_monitors() {
+    MSG="Monitoring tools"
+    local -a PacmanPkgs=(
+        htop # Process viewer
+        iftop # Real-time bandwidth monitoring tool
+        btop # System monitoring tool
+        ctop # Docker container monitoring tool
+        atop # System and process monitor
+        nethogs # Bandwidth monitoring tool (groups traffic by process)
+        nvtop # Nvidia top
+        nmon # System monitoring tool
+        procs # Modern alternative to ps
+        iptraf-ng # Ip Tranffic viewer
+        termshark
+        plasma-systemmonitor radeontop amdgpu_top wireshark-qt
+        powertop glances
+        lazydocker helvum
+    )
+    Pacman_install "${MSG}"
+    AUR_Install "${MSG}" ntopng-bin
+}
+
+function Install_utils() {
+    MSG="Utils"
+    Pacman_install "${MSG}" 7zip xz tar pax rclone brightnessctl cpu-x dust gdu tree \
+        tmux psmisc sysstat android-tools ansible pass zsh zsh-syntax-highlighting
+    AUR_Install "${MSG}" nbfc-linux nbfc-gtk
+}
+
+function Install_Metadata_Shielding() {
+    MSG="Metadata shielding"
+    Pacman_install "${MSG}" dnscrypt-proxy torsocks
+}
+
+function Install_term_filemanagers() {
+    MSG="Terminal File managers"
+    Pacman_install "${MSG}" yazi vifm ranger nautilus dolphin lf
+}
+
+function Install_pentesting_tools() {
+    MSG="Information Gathering"
+    Pacman_install "${MSG}" nmap whois nikto
+    AUR_Install "${MSG} via aur" zaproxy dnsrecon recon-ng amass gobuster \
+        sublist3r enum4linux shodan dmitry
+
+    MSG="Exploitation Tools"
+    Pacman_install "${MSG}" metasploit
+    AUR_Install "${MSG} via aur" openvas nessus
+
+    MSG="Wireless Tools"
+    Pacman_install "${MSG}" aircrack-ng reaver kismet wifite
+    AUR_Install "${MSG} via aur" fluxion airgeddon
+
+    MSG="Password & Cryptography Tools"
+    Pacman_install "${MSG}" john hashcat openssl cryptsetup
+    AUR_Install "${MSG} via aur" cain gpg
+
+    MSG="Network & System Analysis"
+    Pacman_install "${MSG}" tcpdump ettercap-gtk mtr bettercap netcat
+    AUR_Install "${MSG} via aur" wireshark-gtk etdiscover rpspoof
+
+    MSG="Forensics & IR Tools"
+    Pacman_install "${MSG}" volatility sleuthkit volatility3
+    AUR_Install "${MSG} via aur" autopsy scalpel bulk_extractor dc3dd
+
+    MSG="Reverse Engineering"
+    Pacman_install "${MSG}" radare2 ghidra gdb llvm clang base-devel strace ltrace
+    AUR_Install "${MSG} via aur" ollydbg x64dbg
+}
+
+function Install_crypto_fun() {
+    MSG="Cryptography tools"
+    Pacman_install "${MSG}" hashcat toilet cacafire cowsay
+    AUR_Install "${MSG} via aur" steghide
+}
+
+function Install_sway_setup() {
+    MSG="Install sway"
+    local -a PacmanPkgs=(
+        sway swaybg swayidle swayimg
+        swaylock swaync python-i3ipc
+    )
+    local -a AurPkgs=(
+        autotiling
+    )
+    Pacman_install "${MSG}" "${PacmanPkgs[@]}"
+    AUR_Install "${MSG} via aur" "${AurPkgs[@]}"
+}
+
+function Install_mail() {
+    MSG="Email client"
+    local -a PacmanPkgs=(
+        mutt msmtp
+    )
+    Pacman_install "${MSG}" "${PacmanPkgs[@]}"
+}
+
+function AI() {
+    local -a PacmanPkgs=(
+        supercollider #(sound engine)
+        tgpt # A cli wrapper around AI chatbots
+        ghc
+        cabal
+    )
+    local -a AurPkgs=(
+        sc3-plugins # (Needed for SuperDirt)
+        # Haskell toolchain
+        # pipewire-jack
+        cabal-install
+        a2jmidid # MIDI bridge for DAW routing later
+    )
+    MSG "Ai tools"
+    Pacman_install "${MSG}" "${PacmanPkgs[@]}"
+}
+
+function Install_misc_tools() {
+    MSG="Miscellaneous Tools"
+    local -a PacmanPkgs=(
+        zettlr figlet terminator sleuthkit lshw inxi net-tools swww
+        ufw whois wikiman dhclient darktable qemu termdown thunderbird lazygit xdot
+        syslog-ng glances krusader nwg-drawer speedtest-cli kube-apiserver kubectl
+        syncplay ncurses carla qtractor rust rust-src ardour qt6-tools obsidian gtypist
+        nvidia-container-toolkit weechat irssi blender okular krita vim git yt-dlp
+        docker gimp wofi code python-openai-whisper perl-image-exiftool xev time pv
+        shfmt binwalk bat eza lsd vsftpd wget curl fuzzel fastfetch stress stress-ng
+        acpid acpica libisoburn tgpt python-pipx xorg-xinit xorg-server ly
+        android-file-transfer iwd
+        chafa # Terminal Image viewer (needs selix support)
+        httrack # download website for local use
+        qbittorrent
+        veracrypt
+        nginx apache
+        lynx w3m
+        kate bind
+        edk2-ovmf # bios
+        swtpm # tpm chip support for qemu
+        cloc # Count lines of code
+        dunst
+    )
+
+    local -a AurPkgs=(
+        lagrange-bin vtop rsyslog stdman
+        piper-tts-bin delta bindfs yambar
+        simple-mtpfs
+    )
+
+    Pacman_install "${MSG}" "${PacmanPkgs[@]}"
+    AUR_Install "${MSG} via aur" "${AurPkgs[@]}"
+}
+
+
+# Main Handler #
+
+function main() {
+    sudo pacman -Syu --noconfirm
+    for arg in "$@"; do
+        case "$arg" in
+            graphics) Install_graphics_tools ;;
+            browsers) Install_browsers ;;
+            terminals) Install_terminals ;;
+            monitors) Install_monitors ;;
+            utils) Install_utils ;;
+            filemanagers) Install_term_filemanagers ;;
+            pentest) Install_pentesting_tools ;;
+            crypto) Install_crypto_fun ;;
+            sway) Install_sway_setup ;;
+            misc) Install_misc_tools ;;
+            mail) Install_mail ;;
+            sec*) Install_security;;
+            all)
+                Install_graphics_tools
+                Install_browsers
+                Install_terminals
+                Install_monitors
+                Install_utils
+                Install_term_filemanagers
+                Install_Metadata_Shielding
+                Install_pentesting_tools
+                Install_crypto_fun
+                Install_sway_setup
+                Install_misc_tools
+                Install_mail
+                Install_security
+                ;;
+            *) LOG error "Unknown module: $arg" ;;
+        esac
+    done
+}
+
+main "$@"
+

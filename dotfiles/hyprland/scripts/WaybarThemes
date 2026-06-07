@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+set -uo pipefail
+
+function toggle_theme() {
+    local action="${1:-"reload_current"}"
+
+    local current_waybar_style="${theme_dir}/current/style.css"
+    local current_waybar_config="${theme_dir}/current/config.jsonc"
+    local msg=""
+
+    if [[ "${action}" == "toggle_next" ]]; then
+        num=$(( (num % total_available_themes) + 1))
+        msg="Started Waybar with profile: ${num}"
+    elif [[ "${action}" == "reload_current" ]]; then
+        num=${num}
+        msg="Reloaded Waybar with current profile: $num"
+    else
+        msg="Nothing got selected"
+    fi
+
+    background_img="${theme_dir}/$num/bg/bg"
+
+    if [[ $found_swww -eq 1 ]]; then
+        swww img "${background_img}" --transition-type fade --transition-duration 1
+    else
+        swaybg -o '*' -i "${background_img}" -m fill
+    fi
+
+    if ! pgrep -f "waybar -c ${current_waybar_config} -s ${current_waybar_style}" &> /dev/null; then
+        waybar -c "${current_waybar_config}" -s "${current_waybar_style}" &> /dev/null &
+    fi
+
+    ln -sf ../$num/config.jsonc "${current_waybar_config}"
+    ln -sf ../$num/style.css "${current_waybar_style}"
+
+    sleep 0.08 && pkill -SIGUSR2 -f "waybar -c .* -s .*"
+
+    notify-send -t 1000 "${msg}" || true
+}
+
+function main() {
+    local -g num=${1:-1}
+    local -g total_available_themes=0 found_swww=0
+    local -g config_dir="${HOME}/.config/hypr"
+    local -g theme_dir="${config_dir}/waybar/themes"
+    num=$((num-1))
+
+    pgrep -f "bash .*${0}" | grep -v "^$$" | xargs -r kill &> /dev/null || true
+
+    for i in ${theme_dir}/[0-9]*; do
+        total_available_themes=$((total_available_themes + 1))
+    done
+
+    if command -v "swww-daemon" &> /dev/null; then
+        found_swww=1
+        pkill -x swww-daemon
+        swww-daemon &> /dev/null &
+    fi
+
+    trap 'toggle_theme toggle_next'     SIGUSR1
+    trap 'toggle_theme reload_current'  SIGUSR2
+    trap 'exit 0'                       SIGINT SIGTERM
+
+    toggle_theme toggle_next
+
+    while read -r line; do :; done
+}
+
+main "${@}"
+

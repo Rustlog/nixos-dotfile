@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+function main() {
+    local -i browser=${1}
+
+    case ${browser} in
+        2) zen-browser ;;
+        3) brave ;;
+        4) opera ;;
+        5) waterfox ;;
+    esac
+    return 0
+}
+
+main "$@"
+

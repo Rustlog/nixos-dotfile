@@ -1,0 +1,58 @@
+# foot configuration for sway
+# vim: sts=4 sw=4 et ft=confini:
+
+[main]
+term=xterm-256color
+app-id=foot
+title=foot
+locked-title=1
+font=SourceCodePro:size=18:weight=bold:slant=Italic
+font-bold=SourceCodePro:size=18:weight=bold:slant=Italic
+font-italic=SourceCodePro:size=18:weight=bold:slant=Italic
+# font=NotoSansMono:size=18:weight=bold:slant=Italic
+# font-bold=NotoSansMono:size=18:weight=bold:slant=Italic
+# font-italic=NotoSansMono:size=18:weight=bold:slant=Italic
+font-size-adjustment=10%
+# gamma-correct-blending=yes
+initial-window-size-pixels=1200x600
+
+[colors]
+# background=202020    # Darker default background (true dark, no blue/violet tint)
+# foreground=F5F5F5    # Light Grayish-White Text (Soft, Clear Text)
+
+# regular0, ..regular7: Black, Red, Green, Yellow, Blue, Magenta, Cyan, White
+# Default: 242424, f62b5a, 47b413, e3c401, 24acd4, f2affd, 13c299, e6e6e6 (starlight theme, V4).
+# regular0=1A1A1A
+regular1=F4005F
+regular2=A8E024
+regular3=FA8419
+regular4=9D65FF
+regular5=F4005F
+regular6=58D1EB
+regular7=C4C5B5
+# bright0, ..bright7: Black,  Red,  Green, Yellow, Blue, Magenta, Cyan, White
+# Default: 616161, ff4d51, 35d450, e9e836, 5dc5f8, feabf2, 24dfc4, ffffff (starlight theme, V4).
+# bright0=1A1A1A
+bright1=F4005F
+bright2=A8E024
+bright3=FA8419
+bright4=9D65FF
+bright5=F4005F
+bright6=58D1EB
+bright7=C4C5B5
+
+[csd]
+preferred=none
+size=16
+
+[environment]
+EDITOR=nvim
+COLORTERM=truecolor
+
+[cursor]
+blink=false
+blink-rate=0
+
+[mouse]
+hide-when-typing=true
+

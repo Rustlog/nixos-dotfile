@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+HL="\033[1m"
+NC="\033[0m"
+MSG_COL="\033[38;2;255;255;200m"
+
+# Print a formatted header
+function HEADER() {
+    printf "${HL}${MSG_COL}%s${NC}\n" "${1}"
+}
+
+# Print a labeled info row
+function INFO() {
+    printf "  ${MSG_COL}%-30s${NC}: %s\n" "${1}" "${2}"
+}
+
+sudo -v # ask for sudo up front
+
+HEADER "System"
+INFO "Hostname" "$(cat /etc/hostname)"
+INFO "Kernel Version" "$(uname -r)"
+INFO "OS" "$(source /etc/*release && echo "$PRETTY_NAME")"
+INFO "Architecture" "$(uname -m)"
+INFO "Uptime" "$(uptime -p)"
+
+HEADER "Hardware"
+INFO "Product Name" "$(sudo dmidecode -s system-product-name)"
+INFO "Chassis Type" "$(sudo dmidecode -s chassis-type)"
+INFO "System Manufacturer" "$(sudo dmidecode -s system-manufacturer)"
+INFO "System Serial Number" "$(sudo dmidecode -s system-serial-number)"
+INFO "Motherboard Serial Number" "$(sudo dmidecode -s baseboard-serial-number)"
+
+HEADER "BIOS"
+INFO "BIOS Version" "$(sudo dmidecode -s bios-version)"
+INFO "BIOS Vendor" "$(sudo dmidecode -s bios-vendor)"
+INFO "BIOS Release Date" "$(sudo dmidecode -s bios-release-date)"
+
+HEADER "CPU"
+INFO "Processor" "$(sudo dmidecode -s processor-version)"
+INFO "Family" "$(sudo dmidecode -s processor-family)"
+INFO "Manufacturer" "$(sudo dmidecode -s processor-manufacturer)"
+
+HEADER "Memory"
+TOTAL_RAM=$(free -h | awk '/Mem:/ {print $2}')
+TOTAL_SWAP=$(free -h | awk '/Swap:/ {print $2}')
+INFO "Total RAM" "$TOTAL_RAM"
+INFO "Total Swap" "$TOTAL_SWAP"
+
+HEADER "Environment"
+INFO "Shell" "$SHELL"
+INFO "DE/WM" "${XDG_CURRENT_DESKTOP:-$DESKTOP_SESSION}"
+INFO "Display Resolution" "$(xrandr | grep '*' | awk '{print $1}' | head -n1)"
+
+HEADER "Network"
+INFO "IP Address" "$(ip route show | grep -o "src [0-9].*[0-9]" | sort -u | cut -d' ' -f2)"
+INFO "Default Interface" "$(ip route show | awk '/default/ {print $5}' | head -n1)"
+

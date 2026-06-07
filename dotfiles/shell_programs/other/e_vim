@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+function GenKey() {
+    local file="${1}"
+    { printf '%s\n' {{A..Z},{a..z}} | shuf | tr -d '\n'; \
+        printf ' -> '; printf '%s' {{A..Z},{a..z}}; \
+        printf '\n'; } 1> "${file}"
+    cp "${file}" "${file}.bak"
+}
+
+function Encrypt() {
+    local key="${1}"
+    tr 'A-Za-z' "${key}" < /dev/stdin
+}
+
+function Decrypt() {
+    local key="${1}"
+    tr "${key}" 'A-Za-z' < /dev/stdin
+}
+
+function main() {
+    local key_file="${HOME}/.config/custom/${0##*/}/config"
+    local -a files=()
+    local -a editor_args=()
+    local key=""
+
+    mkdir -p "${key_file%/*}"
+
+    if [[ ! -s "${key_file}" || ! -f "${key_file}" ]]; then
+        GenKey "${key_file}" && printf '%s\n' "New key saved to '${key_file}'"
+    fi
+
+    key="$(cat "${key_file}" | cut -d' ' -f1)"
+
+    for arg in "${@}"; do
+        case "${arg}" in
+            -*encrypt)
+                [[ -n "${2:-""}" ]] || { echo "[!]: file is required as a second parameter."; return 1; }
+                Encrypt "${key}" < "$2" > "${2}.tmp"
+                mv "${2}.tmp" "$2" &> /dev/null
+                rm "${2}.tmp" &> /dev/null
+                return $?
+                ;;
+            -*decrypt)
+                [[ -n "${2:-""}" ]] || { echo "[!]: file is required as a second parameter."; return 1; }
+                Decrypt "${key}" < "$2" > "${2}.tmp"
+                mv "${2}.tmp" "$2" &> /dev/null
+                rm "${2}.tmp" &> /dev/null
+                return $?
+                ;;
+                -*) editor_args+=("${arg}") ;;
+                *) files+=("${arg}") ;;
+        esac
+    done
+
+    for file in "${files[@]}"; do
+        tmp_file="$(mktemp)"
+        if [[ -s ${file} ]]; then
+            Decrypt "${key}" < "${file}" > "${tmp_file}"
+            "${EDITOR:-"vim"}" "${editor_args[@]}" "${tmp_file}"
+        else
+            "${EDITOR:-"vim"}" "${editor_args[@]}" "${tmp_file}"
+        fi
+        Encrypt "${key}" < "${tmp_file}" > "${file}"
+        rm "${tmp_file}" &> /dev/null
+    done
+}
+
+main "$@"
+

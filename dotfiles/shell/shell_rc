@@ -1,0 +1,1826 @@
+#!/usr/bin/env bash
+# vim:filetype=bash
+
+set -o pipefail
+
+PKG_MANAGER=""
+
+function log() {
+    local _type="${1:-}"; shift
+    local _color="" _t=""
+
+    local info_color="\e[38;2;85;255;126m" warn_color="\e[38;2;255;170;10m" \
+        error_color="\e[38;2;244;29;31m" fatal_color="\e[5m\e[38;2;255;0;0m" \
+        other_color="\e[38;2;251;255;208m" nc="\e[0m"
+
+    case "${_type}" in
+        info) _color="${info_color:-}" _t="*" ;;
+        warn) _color="${warn_color:-}" _t="^" ;;
+        error) _color="${error_color:-}" _t="!" ;;
+        fatal) _color="${fatal_color:-}" _t="#" ;;
+        *) _color="${other_color:-}" _t="" ;;
+    esac
+
+    printf "[%b%s%b%s]: %b\n" "${_color}" "${_type}" "${nc}" "${_t}" "${*}"
+}
+
+function ColorPath() {
+    local blue="\e[38;2;150;134;255m" nc="\e[0m"
+    sed -e "s@${HOME}@${blue//\\/\\\\}~${nc//\\/\\\\}@g" <(printf "%s\n" "${1}")
+}
+
+function Bash_and_ZSH_setup() {
+    local zsh_dir
+    if [[ -n "$BASH_VERSION" ]]; then
+        set -o vi
+        export HISTCONTROL="ignoredups:erasedups"
+        bind '"\C-o":"lfcd\n"'
+        bind -m vi-insert '"\C-l": clear-screen'
+        bind -m vi-command '"\C-l": clear-screen'
+    elif [[ -n "$ZSH_VERSION" ]]; then
+        export ZSH="${HOME}/.oh-my-zsh"
+        CASE_SENSITIVE=true
+        # ZSH_THEME="eastwood"
+        plugins+=(vi-mode git gitfast docker pass)
+        # shellcheck disable=SC1091
+        source "${ZSH}/oh-my-zsh.sh"
+        zsh_dir="$( \
+            find /usr/share/zsh* \( -type d -o -type l \) -name 'zsh-syntax-highlighting' 2>/dev/null
+        )"
+        # shellcheck disable=SC1090
+        source "${zsh_dir}"/*.zsh
+        bindkey -s '^o' 'lfcd\n'
+        autoload edit-command-line
+        bindkey '^e' edit-command-line
+        setopt HIST_IGNORE_DUPS
+        setopt HIST_IGNORE_ALL_DUPS
+        setopt HIST_SAVE_NO_DUPS
+        setopt HIST_FIND_NO_DUPS
+        setopt HIST_EXPIRE_DUPS_FIRST
+        setopt NO_EXTENDED_HISTORY
+        unsetopt EXTENDED_HISTORY
+    fi
+    mkdir -p -- "${TMPDIR}"
+}
+
+function ApplyShellTheme() {
+    local arg="${1:-default}"
+    local __ESC=$'\e' __bracket_color=""
+    local __guessed_hardware=""
+
+    if [[ -n "$BASH_VERSION" ]]; then
+        local __pstart="\[" __pend="\]" \
+            __username="\u" __hostname="\h" __work_dir="\w"
+    elif [[ -n "$ZSH_VERSION" ]]; then
+        local __pstart="%{" __pend="%}" \
+            __username="%n" __hostname="%m" __work_dir="%~"
+    fi
+
+    if ! __guessed_hardware="$(grep CHASSIS_TYPE /etc/machine-info | \
+        cut -d= -f2 2>/dev/null)"; then
+        local is_detection_failed=no
+        case "$(</sys/class/dmi/id/chassis_type)" in
+            3|4)   __guessed_hardware="desktop"  ;;
+            6|7)   __guessed_hardware="tower"    ;;
+            8|9)   __guessed_hardware="laptop"   ;;
+            10|14)__guessed_hardware="notebook"  ;;
+            11)    __guessed_hardware="handheld" ;;
+            31|32) __guessed_hardware="laptop"   ;;
+            23|28) __guessed_hardware="server"   ;;
+            24)    __guessed_hardware="chassis"  ;;
+            [0-9]*) __guessed_hardware="desktop" ;;
+            *) log error "failed to detect hardware"; is_detection_failed=yes ;;
+        esac
+        if [[ "${is_detection_failed}" == "yes" ]]; then
+            __guessed_hardware="unknown"
+        else
+            if ask_user "save guessed machine info (${__guessed_hardware})? (y|n) or (c) for custom name: "; then
+                printf '\n'; printf '%b\n' "#!/bin/sh\n\nCHASSIS_TYPE=${__guessed_hardware}\n" | \
+                    sudo tee /etc/machine-info
+            else
+                if [[ $? -eq 10 ]]; then
+                    local __cusom_name=""
+                    printf '%b' "\ncustom name: "; read -r __cusom_name
+                    if ask_user "save custom name? (y|n): "; then
+                        printf '\n'; printf '%b\n' "#!/bin/sh\n\nCHASSIS_TYPE=${__cusom_name}\n" | \
+                            sudo tee /etc/machine-info
+                    fi
+                fi
+            fi
+            __guessed_hardware="$(grep CHASSIS_TYPE /etc/machine-info | cut -d= -f2 2>/dev/null)"
+        fi
+    fi
+
+    __FAINTED_GREEN="${__pstart}${__ESC}[38;2;163;240;96m${__pend}"
+    __FAINTED_YELLOW="${__pstart}${__ESC}[38;2;231;245;180m${__pend}"
+    __FAINTED_RED="${__pstart}${__ESC}[38;2;255;100;100m${__pend}"
+    __BLUE_DIR="${__pstart}${__ESC}[38;2;89;159;240m${__pend}"
+    __VIOLET="${__pstart}${__ESC}[38;2;129;137;223m${__pend}"
+    __SKY_GREEN="${__pstart}${__ESC}[38;2;48;200;148m${__pend}"
+    __WHITE="${__pstart}${__ESC}[38;2;200;200;200m${__pend}"
+    __HL="${__pstart}${__ESC}[1m${__pend}" __NC="${__pstart}${__ESC}[0m${__pend}"
+
+    if [[ -n "$BASH_VERSION" ]]; then
+        # __bracket_color="${__pstart}${__ESC}[38;2;128;134;243m${__pend}"
+        __bracket_color="${__pstart}${__ESC}[38;2;244;188;44m${__pend}"
+        __OPEN="${__bracket_color}{{${__NC}" __CLOSE="${__bracket_color}}}${__NC}"
+    elif [[ -n "$ZSH_VERSION" ]]; then
+        __bracket_color="${__pstart}${__ESC}[38;2;243;110;102m${__pend}"
+        __OPEN="${__bracket_color}::${__NC}" __CLOSE="${__bracket_color}::${__NC}"
+    fi
+    __GUESSED_HARDWARE="${__SKY_GREEN}${__guessed_hardware}://${__NC}"
+    __USERNAME="${__FAINTED_GREEN}${__username}${__NC}"
+    __HOSTNAME="${__FAINTED_YELLOW}${__hostname}${__NC}"
+    __WORK_DIR="${__BLUE_DIR}${__work_dir}${__NC}"
+
+    is_inside_git() {
+        dir="${PWD:-}"
+        while [[ "${dir}" != "" ]]; do
+            [[ -d "${dir}/.git/" ]] && return 0
+            dir="${dir%/*}"
+        done
+        return 1
+    }
+
+    # shellcheck disable=SC2329
+    show_current_git_branch() {
+        local __branch="" __string=""
+        if is_inside_git && git status --short &>/dev/null; then
+            local __git_dirty=""
+            [[ -n "$(git status --porcelain)" ]] && __git_dirty="*"
+            if __branch=$(git rev-parse --git-path rebase-merge &>/dev/null && \
+                    git rev-parse --short --verify REBASE_HEAD 2>/dev/null); then
+                __string="${__WHITE}git${__NC}:"
+                __string+="${__SKY_GREEN}(${__NC}"
+                __string+="${__WHITE}rebase:${__NC}"
+                __string+="${__VIOLET}${__pstart}${__branch}${__pend}${__NC}"
+                __string+="${__FAINTED_RED}${__git_dirty}${__NC}${__SKY_GREEN})${__NC} "
+            else
+                __string="${__WHITE}git${__NC}:"
+                __string+="${__SKY_GREEN}(${__NC}"
+                __string+="${__VIOLET}${__pstart}$(git symbolic-ref --short HEAD 2>/dev/null)${__pend}${__NC}"
+                __string+="${__FAINTED_RED}${__git_dirty}${__NC}${__SKY_GREEN})${__NC} "
+            fi
+        fi
+        printf '%b\n' "${__string}"
+    }
+
+    if [[ -n "$BASH_VERSION" ]]; then
+        [[ "${arg}" =~ ^(simple|generic)$ ]] && { PROMPT_COMMAND='PS1="${__WORK_DIR} $(show_current_git_branch)$ "'; return 0; }
+        PROMPT_COMMAND='PS1="${__OPEN} ${__GUESSED_HARDWARE}${__USERNAME}@${__HOSTNAME}:${__WORK_DIR} $(show_current_git_branch)${__CLOSE} $ "'
+    elif [[ -n "$ZSH_VERSION" ]]; then
+        autoload -Uz vcs_info
+        zstyle ":vcs_info:git:*" formats "${__WHITE}git${__NC}:${__SKY_GREEN}(${__NC}${__VIOLET}%b${__NC}${__SKY_GREEN})${__NC} "
+        zstyle ":vcs_info:git:*" actionformats ""
+        precmd() { vcs_info; }
+        [[ "${arg}" =~ ^(simple|generic)$ ]] && { PROMPT='${__WORK_DIR} ${vcs_info_msg_0_}$ '; return 0; }
+        PROMPT='${__OPEN} ${__GUESSED_HARDWARE}${__USERNAME}@${__HOSTNAME}:${__WORK_DIR} ${vcs_info_msg_0_}${__CLOSE} $ '
+    fi
+}
+
+function SetAndExportVars() {
+    ### Global variables
+    local schema_path
+    HOSTNAME="${HOSTNAME:-$(cat /etc/hostname)}"
+    LANG="en_US.UTF-8"
+    WINEPREFIX="$HOME/wine"
+    HISTSIZE=1000000
+    HISTFILE="$HOME/.cache/histfile_${USER:-$(id -nu)}"
+    EDITOR="nvim"
+    BREW="/home/linuxbrew/.linuxbrew"
+    MEDIA="/run/media/$USER"
+    VJOURNAL_DIR="${HOME}/dev/journals"
+    TODAY="$(date +%F)"
+    MUSIC_DIR="${HOME}/media/music"
+    XDG_DATA_HOME="$HOME/.local/share"
+    HOME="${HOME:-$(printf ~)}"
+    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/${UID:-$(id -u)}}"
+    TMPDIR="${XDG_RUNTIME_DIR}/tmp/"
+    PAGER="bat --decorations=never --paging=always"
+    LESS="-Rc"
+    LESSCHARSET=utf-8
+    schema_path="$(printf /nix/store/*gtk+3*/share/gsettings-schemas/* 2>&1 | cut -d' ' -f1 2>/dev/null)"
+    [[ -d "${schema_path}" ]] && XDG_DATA_DIRS="${XDG_DATA_DIRS}:${schema_path}"
+
+    export HOSTNAME LANG WINEPREFIX HISTSIZE HISTFILE \
+        EDITOR BREW MEDIA XDG_DATA_HOME HOME XDG_RUNTIME_DIR \
+        PAGER LESS LESSCHARSET PATH TMPDIR MUSIC_DIR VJOURNAL_DIR
+}
+
+function Alias_vars() {
+    # ls/directory-listing commands alias
+    alias lll="eza --color=always --icons=always --group --header --classify=always --octal-permissions --binary --across --sort=size --numeric --total-size --long"
+    alias l="eza --color=always --icons=always --group --header --classify=always --octal-permissions --binary --across --sort=created --long"
+    alias eza="eza --color=always --icons=always --group --header --classify=always --octal-permissions --binary --across --sort=size"
+    alias ls="lsd --color=always --git --icon=always --group-directories-first --classify --reverse --sort=time"
+    alias ll="lsd --long --color=always --git --icon=always --group-directories-first --classify --permission octal --total-size --sort=size"
+    alias Lsblk="lsblk --paths -o+SIZE --fs"
+    alias lsblk-="lsblk -o+FSTYPE,LABEL"
+    alias diff="diff --color=auto"
+    alias grep="grep --color=auto"
+    alias ip="ip --color=auto"
+    alias cppcheck="cppcheck --enable=warning,style,performance,portability,information --inconclusive --std=c23"
+    alias cloc="cloc --quiet"
+
+    # File operations alias
+    alias mv="mv --verbose"
+
+    # Navigation/cd aliases
+    alias M="CD \$HOME/media/music"
+    alias P="CD \$HOME/media/pictures"
+    alias V="CD \$HOME/media/videos"
+    alias L="CD \$HOME/dev/learndir"
+    alias R="CD \$HOME/dev/projects/repos"
+    alias D="CD \$HOME/Downloads"
+    alias d="CD \$HOME/dev"
+    alias lfcd="cd \$(lf -last-dir-path=/dev/stdout)"
+
+    # Git aliases
+    alias gs="git status"
+
+    # Config file editing aliases
+    _EDIT_STUFF="\${EDITOR:-vim} \"\${config}\"; unset config"
+    alias zshrc="config=\$HOME/.zshrc && ${_EDIT_STUFF}"
+    alias vimrc="config=\$HOME/.vimrc && ${_EDIT_STUFF}"
+    alias nvimrc="config=\$HOME/.config/nvim/init.vim && ${_EDIT_STUFF}"
+    alias swayconfig="config=\${HOME}/.config/sway/config && ${_EDIT_STUFF}"
+    alias waybarconfig="config_dir=\${HOME}/.config/waybar && \${EDITOR:-vim} \"\${config_dir}\"; unset config_dir"
+    unset _EDIT_STUFF
+
+    # System monitoring aliases
+    alias nvtop="nvtop --delay 2"
+    alias radeontop="radeontop --color"
+    alias Dmesg="sudo dmesg --color=always | less -c -"
+    alias watch="watch --no-title"
+    alias systemmonitor="XDG_CURRENT_DESKTOP=KDE GTK_THEME=Adwaita:dark QT_QPA_PLATFORMTHEME=gtk plasma-systemmonitor"
+
+    # Application/tool aliases
+    alias ncdu="ncdu --color dark"
+    alias sway="env XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=sway WLR_RENDERER=vulkan sway &> /tmp/sway.log"
+    alias VimBeGood="clear; podman run -it --rm brandoncc/vim-be-good && printf '\n' && clear"
+    alias gtypistH="gtypist --personal-best --max-error=1.8 --no-welcome-screen --term-cursor --word-processor --always-sure"
+    alias qutebrowser="QT_QPA_PLATFORM=xcb QT_WEBENGINE_DISABLE_GPU=1 qutebrowser"
+    alias colorchoser="env QT_QPA_PLATFORMTHEME=qt6ct kcolorchooser 2> /dev/null & disown"
+    alias getcolors="env QT_QPA_PLATFORMTHEME=qt6ct kcolorchooser 2> /dev/null & disown"
+    alias ffmpeg="ffmpeg -hide_banner"
+    alias gcaff="git commit --amend --no-edit && git reflog expire --expire=now --all && git gc --prune=now"
+    alias gcaf="git commit --amend --no-edit"
+    alias ttyper_H="ttyper --words 20 --language english-advanced"
+    alias mpv="env VK_ICD_FILENAMES=\$(printf /usr/share/vulkan/icd.d/*radeon*x86_64.json) mpv --volume=44 --vid=auto --audio-device=pulse"
+    alias editor="\$EDITOR"
+    alias edit="\$EDITOR"
+    alias EDITOR="\$EDITOR"
+    alias gdbgui="gdbgui --no-browser"
+    alias "clang++"="clang++ -fdiagnostics-color=always"
+    alias "clang"="clang -fdiagnostics-color=always"
+    alias safe_copy="rsync -aPh --fsync"
+    alias mirror_copy="rsync -aPh --fsync --delete"
+    alias remote_copy="rsync -aPz --compress-choice=zstd"
+    alias PAGER="bat --decorations=never --paging=always"
+    alias waterfox="waterfox&disown"
+    alias waterfox_dev="waterfox_dev&disown"
+    alias firefox="firefox&disown"
+    alias librewolf="librewolf&disown"
+
+    # Metadata/file info aliases
+    command -v exiftool &>/dev/null || alias exiftool="/usr/bin/vendor_perl/exiftool"
+    alias metadata="/usr/bin/vendor_perl/exiftool"
+    alias Fonts="fc-list : file | \
+        sed \
+            -e 's|.*/||' \
+            -e 's|\[.*\]||' \
+            -e 's|-| |' -e 's|\..*||' | sort -u"
+
+    # System/log management aliases
+    alias clear_systemd_journal_logs="sudo journalctl --rotate && \
+        sudo journalctl --vacuum-size=1K && sudo journalctl --vacuum-time=1s"
+    alias sourceme="source ~/.zshrc"
+    alias savehist="file=$HOME/.saved_shell_history && cat \$HISTFILE >> \${file} && unset file"
+
+    # Flatpak application aliases
+    _FP_RUN="flatpak run \"\${fp_name}\" || flatpak install \"\${fp_name}\" -y"
+    alias fp-scrivano="fp_name=com.github.scrivanolabs.scrivano; ${_FP_RUN}; unset fp_name"
+    alias fp-draw="fp_name=com.github.scrivanolabs.scrivano; ${_FP_RUN}; unset fp_name"
+    alias fp-tipp10="fp_name=com.gitlab.tipp10.tipp10; ${_FP_RUN}; unset fp_name"
+    alias fp-ktouch="fp_name=org.kde.ktouch; ${_FP_RUN}; unset fp_name"
+    alias fp-typing="fp_name=org.kde.ktouch; ${_FP_RUN}; unset fp_name"
+    alias fp-easyeffects="fp_name=com.github.wwmm.easyeffects; ${_FP_RUN}; unset fp_name"
+    alias fp-effects="fp_name=com.github.wwmm.easyeffects; ${_FP_RUN}; unset fp_name"
+    alias fp-zen="fp_name=app.zen_browser.zen; ${_FP_RUN}; unset fp_name"
+    alias fp-pomodoro="fp_name=org.jousse.vincent.Pomodorolm; ${_FP_RUN}; unset fp_name"
+    alias fp-pomodorolm="fp_name=org.jousse.vincent.Pomodorolm; ${_FP_RUN}; unset fp_name"
+    alias fp-discord="fp_name=com.discordapp.Discord; ${_FP_RUN}; unset fp_name"
+    alias fp-VideoEditor="fp_name=org.kde.kdenlive; ${_FP_RUN}; unset fp_name"
+    alias fp-calculator="fp_name=io.github.Qalculate.qalculate-qt; ${_FP_RUN}; unset fp_name"
+    alias fp-qcal="fp_name=io.github.Qalculate.qalculate-qt; ${_FP_RUN}; unset fp_name"
+    unset _FP_RUN
+
+    # Utility aliases
+    alias C='{ command -v clang &>/dev/null && COMPILER=clang; } || COMPILER=cc; \
+        $COMPILER -x c -std=c23 -O0 -pedantic -Wall -Wextra'
+    alias CC='{ command -v clang &>/dev/null && COMPILER=clang; } || COMPILER=cc; \
+        $COMPILER -x c++ -std=c++23 -lstdc++ -O0 -pedantic -Wall -Wextra'
+    alias NULL="/dev/null"
+    alias clear="tput clear"
+    alias reset="tput reset"
+    alias start-kde="env \
+        XDG_SESSION_TYPE=wayland \
+        QT_QPA_PLATFORM=wayland \
+        GTK_THEME=Breeze:dark \
+        QT_QPA_PLATFORMTHEME=gtk3 startplasma-wayland"
+    alias start-sway="env \
+        XDG_CURRENT_DESKTOP=sway \
+        XDG_SESSION_DESKTOP=sway \
+        XDG_SESSION_TYPE=wayland \
+        QT_QPA_PLATFORM=wayland \
+        GDK_BACKEND=wayland \
+        XDG_DESKTOP_PORTAL_BACKEND=wlr \
+        QT_QPA_PLATFORMTHEME=qt6ct \
+        GTK_THEME=Breeze:dark \
+        WLR_RENDERER=vulkan sway --unsupported-gpu"
+
+    # compiler variables
+    CC="clang"
+    CFLAGS="-std=c23"
+    RELEASE_CFLAGS="-O2 -Wall -Werror -Wpedantic \
+        -fstack-protector-strong -fno-common"
+    DEBUG_CFLAGS="-DDEBUG -O0 -Wall -Werror -Wpedantic -Wextra -Wshadow \
+    -Wconversion -Wsign-conversion -Wundef -Wstrict-prototypes \
+    -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls \
+    -Wswitch-enum -Wswitch-default -Wformat=2 -Wformat-security \
+    -Wformat-overflow -Wfloat-equal -Wcast-align -Wcast-qual \
+    -Wdouble-promotion -Wvla -Wnull-dereference -Wunreachable-code \
+    -fstack-protector-strong -fno-common -fstrict-aliasing \
+    -fno-omit-frame-pointer -fsanitize=address,undefined \
+    -fno-sanitize-recover=all -pedantic-errors -g"
+    LINKER_FLAGS=""
+    DEBUG_LINKER_FLAGS="-fsanitize=address,undefined"
+    RELEASE_LINKER_FLAGS=""
+}
+
+### Determine package manager
+function PackageManager() {
+    local -a pkg_m_Arr=(pacman apt yum dnf yay xbps-install)
+
+    for pkg_m in "${pkg_m_Arr[@]}"; do
+        if command -v "${pkg_m}" &> /dev/null; then
+            PKG_MANAGER="${pkg_m}"
+            log info "System's package manager: '${pkg_m}'"
+            return 0
+        fi
+    done
+}; alias pkgmanager="PackageManager"; alias pkg-manager="PackageManager"; alias my_pkg_m="PackageManager"
+alias my_package_manager="PackageManager"; alias my-package-manager="PackageManager"
+
+### Just check basic utilities in system
+function RequiredTools() {
+    ## Get PackageManager
+    [[ -z $1 ]] && log info "Most basic tools"
+    PackageManager NULL
+    local -a TOOL_ARR=()
+    TOOL_ARR=(
+        # Shells
+        zsh bash dash
+        # Editors
+        nvim vim micro nano
+        # Version control
+        git
+        # Networking
+        curl rsync nmcli wget ssh traceroute dig
+        # Compression
+        gzip bzip2 xz zip
+        # Container
+        docker
+        # filemanager
+        yazi ranger
+        # Build tools
+        make cmake gcc clang
+        # Scripting languages
+        python ruby node npm
+        # Productivity
+        htop btop tmux figlet cowsay tree jq fzf bat lsd eza rg unzip zip
+        # Compilers
+        gcc clang gdb make cmake rustc
+        # Media/ TUI visulas
+        cava mpv imv feh pastel
+        # Others
+        jq lsd fzf bat eza rg yt-dlp rclone jq
+        # DevOps & security extras (optional)
+        kubectl ansible nmap john aircrack-ng
+    )
+
+    for binary in "${TOOL_ARR[@]}"; do
+        if command -v "${binary}" &> /dev/null; then
+            [[ -z $1 ]] && log info "Found '${BLUE}${binary}${NC}' in path: $(whereis ${binary} | cut -d' ' -f2)"
+        else
+            log error "'${BLUE}${binary}${NC}' Not Found. Install it using '$PKG_MANAGER'"
+        fi
+    done
+    return 0
+}; alias goodies="RequiredTools"; alias availabletools="RequiredTools"
+alias mytools="RequiredTools"; alias tools="RequiredTools"
+
+### Rotate text by 13
+function rot13() {
+    [[ -n $ZSH_VERSION ]] && emulate -LR bash
+
+    local -a args=("$@")
+    local -a rot13_=( "tr" "A-Za-z" "N-ZA-Mn-za-m" )
+    local -a input=()
+    local operation_type=""
+    local arg=""
+    local save_path=""
+    local -i argc=${#args[@]}
+
+    if [[ $# -lt 1 ]]; then
+        log error "At least one arguments expected"
+        log info "rot13 <file/string>"
+        return 1
+    fi
+
+    for ((i=0;i<${#args[@]};i++)); do
+        arg="${args[$i]}"
+        if [[ "${arg}" == *=* ]]; then
+            value="${arg##*=}"
+            arg="${arg%%=*}"
+        else
+            value="${args[$((i+))]}"
+            arg="${arg}"
+        fi
+        case "${arg}" in
+            -s|-save|--save)
+                save_path="${args[$(($i+1))]}"
+                i=$((i+1))
+                [[ -z "${save_path}" || ! -f "${save_path}" ]] && {
+                    log error "Not a valid path: '${save_path}'"
+                }
+                ;;
+            -s=*|-save=*|--save=*)
+                save_path="${arg#*=}"
+                [[ -z "${save_path}" || ! -f "${save_path}" ]] && {
+                    log error "Not a valid path: '${save_path}'"
+                }
+                ;;
+            *)
+                [[ -n "${arg}" ]] && input+=("${arg}")
+                ;;
+        esac
+    done
+
+    [[ "${#input[@]}" -eq 0 ]] && {
+        log error "input is empty"
+        return 1
+    }
+
+    [[ -d "${input[0]}" ]] && {
+        log error "Cannot use directories"
+            return 1
+    }
+
+    if [[ -n "${save_path}" && -f  "${save_path}" ]]; then
+        printf "%s: " "Create \"${save_path}\"? (y|n): "; printf '\n'
+        read -r -n 1 YES
+        [[ "${YES}" =~ ^(Y|y)$ ]] && touch "${save_path}"
+    else
+        unset save_path
+    fi
+
+    if [[ ! -f "${input[0]}" ]]; then
+        [[ -n "${save_path}" ]] && "${rot13_[@]}" <<< "${input[@]}" > "${save_path}" || \
+            "${rot13_[@]}" <<< "${input[@]}"
+    else
+        { [[ -n "${save_path}" ]] && "${rot13_[@]}" < "${input[@]}" > "${save_path}"; } || \
+            "${rot13_[@]}" < "${input[@]}"
+    fi
+}
+
+### Fetch defined https_proxy and https_proxy variable to current shell environment
+function Tor() {
+    u_set="${1:-NULL}"
+
+    set_var() {
+        HTTP_PROXY="socks5://127.0.0.1:9050" HTTPS_PROXY="socks5://127.0.0.1:9050"
+        http_proxy="socks5://127.0.0.1:9050" https_proxy="socks5://127.0.0.1:9050"
+        export https_proxy http_proxy HTTPS_PROXY HTTP_PROXY
+    }
+
+    unset_var() {
+        unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy
+    }
+
+    case "${arg}" in
+        un*) unset_var && return 0 ;;
+        sto*) sudo pkill -f "sudo tor" && return 0;;
+    esac
+
+    if pgrep -f "sudo tor" &> /dev/null; then
+        set_var
+        return 0
+    fi
+    sudo pkill -f "sudo tor"
+    sudo tor &> /dev/null & disown
+    set_var
+    unset -f set_var unset_var
+}
+
+### Mount a remote to local mount point
+function RcloneMount() {
+    [[ -n $ZSH_VERSION ]] && emulate -LR bash
+    RequiredTools 0
+    local -a ARGS=("$@") matches=()
+    local action="${ARGS[0]}" drive="${ARGS[1]}" mountPoint="${ARGS[2]}"
+    local list=0 mount=0 umount=0 show_size=0
+    local -a matches=()
+
+    [[ $# -eq 0 ]] && {
+        log error "At least one arguemnt expected"
+            log info "$0 <show-size|list|mount|umount> drive"
+            return 1
+        }
+
+    if [[ -n "$action" ]]; then
+        case "$action" in
+            l|-l|-list|--list|list) list=1 ;;
+            s|-s|-show|--show|--show-size|a|about) show_size=1 ;;
+            m|-m|-mount|--mount|mount) mount=1 ;;
+            u|-u|-umount|--umount|umount) umount=1 ;;
+            *) log error "Unknown action '${action}'"; return 1 ;;
+        esac
+    fi
+
+    if [[ -n "$drive" ]]; then
+        [[ -n "${drive#*=}" ]] && {
+            drive="${drive#*=}"
+        }
+
+    [[ -n $BASH_VERSION ]] && mapfile -t matches < <(rclone listremotes | grep --color=never -i "${drive}")
+    [[ -n $ZSH_VERSION ]] && {
+        matches=("$(rclone listremotes | grep --color=never -i ${drive})")
+    }
+
+    if [[ ${#matches[@]} -eq 1 ]]; then
+        drive=${matches[0]}
+    elif [[ ${#matches[@]} -gt 1 ]]; then
+        log error "Ambiguous drive name: multiple remotes: '${matches[*]}'"
+        printf "Full Name of the remote: "
+        read -r REMOTE
+        drive="${REMOTE}"
+    else
+        log error "No remotes found"
+        return 1
+    fi
+
+    [[ "${drive}" != *: ]] && drive+=:
+    [[ -z "${drive}" ]] && {
+        log error "No remotes. Exiting"
+        return 1
+    }
+    log info "Remote: ${drive}"
+        fi
+
+        if [[ -n "${mountPoint}" ]]; then
+            [[ -n "${mountPoint#*=}" ]] && {
+                mountPoint="${mountPoint#*=}"
+            }
+        mkdir -p "${mountPoint}"
+        [[ -d "${mountPoint}" ]] || log warn "Mount point '${mountPoint}' does not exist"
+        fi
+
+        [[ $list -eq 1 ]] && {
+            rclone listremotes
+        }
+
+    if [[ -z "${drive}" && $listremotes -eq 0 ]]; then
+        log error "Remote is empty"
+        return 1
+    fi
+
+    [[ $mount -eq 1 && $umount -eq 1 ]] && {
+        log warn "--mount and --umount cannot be together"
+        return 1
+    }
+
+    [[ $show_size -eq 1 ]] && {
+        rclone about ${drive}
+    }
+
+    if [[ $umount -eq 1 ]]; then
+        [[ -z ${mountPoint} ]] && mountPoint=$(grep --color=never "${drive}" /proc/mounts | cut -d' ' -f2)
+        if [[ -d "${mountPoint}" ]]; then
+            fusermount -uz "${mountPoint}" || log error "Cannot remove '${DIR}'"
+            rm -rf "${mountPoint}" && \
+                log info "Cleaned '$(grep --color=always "${drive}" /proc/mounts | cut -d' ' -f2)'"
+        fi
+        return 0
+    fi
+    if [[ $mount -eq 1 ]]; then
+        mountPoint="${mountPoint:="/tmp/defaultRemoteMount"}"
+        [[ ! -d "${mountPoint}" ]] && mkdir -p "${mountPoint}"
+        if rclone mount "${drive}":/ "${mountPoint}" --daemon; then
+            grep "${mountPoint}" --color=always /proc/mounts
+        fi
+    fi
+    return 0
+}
+
+### confirmation prompt
+function ask_user() {
+    local prompt_str="${1:-}" confirmation_type="${2:-boolean}"
+    local user_ans=""
+    [[ -n "${prompt_str}" ]] || { log error "empty string"; return 1; }
+    case "${confirmation_type}" in
+        boolean) printf '%b' "${prompt_str}"; read -r -n1 user_ans ;;
+        *) printf '%b\n' "${prompt_str}"; read -r user_ans ;;
+    esac
+    case "${user_ans}" in
+        [Yy]|[Yy][Ee][Ss]) return 0 ;;
+        [Cc]) return 10 ;;
+        *) return 1 ;;
+    esac
+}
+
+### Suppliment function for compilation functions
+function _compileExitHandler() {
+    local exit_code="$1"
+    shift
+    local no_ext_filename="$1"
+    shift
+    local RM=0
+    local -a total_files=()
+    [[ $exit_code -gt 0 ]] && {
+        log error "Compilation Failed"
+            log error "Program exited with code : $exit_code"
+            # Just return if compilation is failed
+            return 1
+        }
+    for arg in "$@"; do
+        if [[ "${arg}" == -* ]]; then
+            [[ "${arg}" =~ ^(--rm|--remove|-rm|-r)$ ]] && RM=1
+        else
+            total_files+=("${arg}")
+        fi
+    done
+
+    "${no_ext_filename}" "${total_files[@]}" # Run the compiled binary
+
+    if [[ $RM -eq 1 ]]; then
+        if rm -f "${no_ext_filename}"; then
+            log info "Cleaned: ${no_ext_filename}"
+        else
+            log error "Failed to remove: ${no_ext_filename}"
+        fi
+    fi
+}
+
+### GUI develeopment (Debuging enabled)
+function GUI_BUILD_DEBUG() {
+    local FILE="$(realpath $1)"
+    local NO_EXT_FILENAME="${FILE%.*}"
+    shift
+    [[ -f "$FILE" ]] && gcc -std=c++20 -Wall -Wextra -Werror -Wconversion \
+        -Wshadow -pedantic -O0 -fno-inline -lstdc++ -lglfw -lGL -lglad -lm \
+        "${FILE}" -o "${NO_EXT_FILENAME}" && "${NO_EXT_FILENAME}"
+    "${NO_EXT_FILENAME}"
+    _compileExitHandler $? "${NO_EXT_FILENAME}" "$@"
+}
+
+### GUI develeopment (release mode)
+function GUI_BUILD_RELEASE() {
+    local FILE=""
+    FILE="$(realpath "$1")"
+    local NO_EXT_FILENAME="${FILE%.*}"
+    shift
+    [[ -f "$FILE" ]] && gcc -std=c++20 -Wall -Wextra -Wconversion -Wshadow \
+        -pedantic -O3 -flto -march=native -funroll-loops -fomit-frame-pointer \
+        -lstdc++ -lglfw -lGL -lglad -lm \
+        "${FILE}" -o "${NO_EXT_FILENAME}" && "${NO_EXT_FILENAME}"
+    "${NO_EXT_FILENAME}"
+    _compileExitHandler $? "${NO_EXT_FILENAME}" "$@"
+}
+
+### Set the path with default locations
+function SetPath() {
+    PATH="/run/wrappers/bin:$HOME/.nix-profile/bin:/nix/profile/bin:$HOME/.local/state/nix/profile/bin"
+    PATH+=: PATH+="/etc/profiles/per-user/$USER/bin:/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin"
+    PATH+=: PATH+="/usr/bin:/usr/sbin:/bin:/sbin:/usr/local/bin:/usr/local/sbin"
+    PATH+=: PATH+="$(find ~/.bin/* -type d 2>&1 | paste -sd: 2>/dev/null)"
+    PATH+=: PATH+="${HOME}/.local/bin:${HOME}/.cargo/bin:${HOME}/.npm_global/bin:${BREW}/bin"
+    PATH+=: PATH+="${HOME}/.scripts:${HOME}/.cargo/bin"
+    export PATH
+}
+
+### Show all the paths in $PATH
+function ShowPath() {
+    [[ -n $ZSH_VERSION ]] && emulate -LR bash
+    local IFS=$':' i=1
+    for p in $PATH; do
+        sed "s@${HOME}@~@g" <(printf '%-2s %-2s %s\n' "${i}" '->' "${p}")
+        ((i++))
+    done
+}; alias show_paths="ShowPath"
+
+### Set refresh rate
+function set_refresh_rate_to() {
+    local -i req_hz=$1
+    local output="" mode=""
+    local px="" hz=""
+
+    if [[ "${XDG_SESSION_TYPE}" == wayland ]]; then
+        output="$(wlr-randr | head -n1 | cut -d' ' -f1)"
+        px=$(wlr-randr | grep current | awk -F' ' '{ print $1 }')
+        hz=$(wlr-randr | grep -P "(?=.*${px})(?=.*${req_hz})" | grep -o -E "${req_hz}\.[0-9]+")
+        mode="${px}px@${hz}Hz"
+        if ! wlr-randr --output "${output}" --mode "${mode}" && return 0; then
+            log error "Cannot set $req_hz"
+        fi
+    elif [[ "${XDG_SESSION_TYPE}" == x11 ]]; then
+        output=$(xrandr | grep 'connected primary' | cut -d' ' -f1)
+        px=$(xrandr | grep '\*' | awk -F' ' '{ print $1 }')
+        hz=$(xrandr | grep "${px}" | grep -Eo "${req_hz}\.[0-9]+")
+        log info "xrandr --output ${output} --mode ${px} --rate ${hz}"
+        xrandr --output "${output}" --mode "${px}" --rate "${hz}" || log error "Cannot set $req_hz"
+    fi
+}
+
+### Set refresh rate to 144Hz
+function 144hz() {
+    set_refresh_rate_to 144
+}
+
+### Set refresh rate to 60Hz
+function 60hz() {
+    set_refresh_rate_to 60
+}
+
+### AI in terminal
+function gpt() {
+    local type_="$1"
+    [[ $# -gt 0 ]] && shift
+    local -a prompt_=("$@")
+    local session_log=""
+    session_log="/tmp/.tgpt_TYPE_$(date +%F_%T).log"
+    case "${type_}" in
+        dev)
+            AI_PROVIDER=phind tgpt --multiline --log "${session_log/TYPE/phind}"
+            ;;
+        img)
+            local img_path="${HOME}/Pictures/tgpt/"
+            mkdir -p "${img_path}"
+            img_path+="tgpt_$(date +%F_%T).png"
+            tgpt --img --out "${img_path}" --width 512 --height 512 "${prompt_[*]}" && \
+                log info "Your imge: $(ColorPath "${img_path}")"
+            ;;
+        *)
+            AI_PROVIDER=isou tgpt --multiline --log "${session_log/TYPE/pollinations}"
+            ;;
+    esac
+}; alias devgpt='gpt dev'; alias gptimg='gpt img'
+
+### Pretty `cat` like command with colors
+function CatBat() {
+    local -a args=("$@")
+    local -a batargs=()
+    for arg in "${args[@]}"; do
+        case "${arg}" in
+            *.conf)
+                batargs+=("--language=ini" "${arg}")
+                ;;
+            *)
+                batargs+=("${arg}")
+                ;;
+        esac
+    done
+    bat \
+        --theme-dark=TwoDark \
+        --color=always \
+        --decorations=never \
+        --paging=never "${batargs[@]}"
+}
+
+### Pretty `less` like command with colors
+function Less() {
+    local -a args=("$@")
+    local -a batargs=()
+    for arg in "${args[@]}"; do
+        case "${arg}" in
+            *.conf)
+                batargs+=("--language=ini" "${arg}")
+                ;;
+            *)
+                batargs+=("${arg}")
+                ;;
+        esac
+    done
+    bat \
+        --theme-dark=TwoDark \
+        --color=always \
+        --decorations=never \
+        --pager="less -c" \
+        --paging=always "${batargs[@]}"
+}
+
+### Temporay writing
+function t() {
+    local temp_file=""
+    temp_file="$(mktemp -t temp_edit_.XXXX)"
+    "${EDITOR}" "${temp_file}"
+    if [[ "${XDG_SESSION_TYPE}" == wayland ]]; then
+        wl-copy < "${temp_file}" && log info "Wayland copy"
+    elif [[ "${XDG_SESSION_TYPE}" == x11 ]]; then
+        xsel < "${temp_file}" && log info "x11 copy"
+    fi
+    rm "${temp_file}"
+}
+
+### Spanish lessons
+function Spanish() {
+    local file=""
+    file="${HOME}/LearnDir/Language/Spanish/Lesson_$(( $(date +%s)/86400 - 20152))_$(date +%d-%b-%Y_).md"
+
+    mkdir -p "${file%/*}"
+
+    if [[ ! -f "${file}" ]]; then
+        touch "${file}"
+        log info "Created $(ColorPath "${file}")"
+    fi
+
+    if [[ -n "${EDITOR}" ]]; then
+        command -v "$EDITOR" > /dev/null 2>&1 || EDITOR="vim"
+        "${EDITOR:-vim}" "${file}"
+        return 0
+    else
+        log error "Your EDITOR variable is unset. Please update it."
+    fi
+
+}
+
+# Set existing locale
+function SetLocale() {
+    local locale="${1:-en_US.UTF-8}"
+    LC_ALL="${locale}"
+    LC_CTYPE="${locale}"
+    LC_NUMERIC="${locale}"
+    LC_TIME="${locale}"
+    LC_COLLATE="${locale}"
+    LC_MONETARY="${locale}"
+    LC_MESSAGES="${locale}"
+    LC_PAPER="${locale}"
+    LC_NAME="${locale}"
+    LC_ADDRESS="${locale}"
+    LC_TELEPHONE="${locale}"
+    LC_MEASUREMENT="${locale}"
+    LC_IDENTIFICATION="${locale}"
+    LANG="${locale}"
+
+    export LC_ALL LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE \
+        LC_MONETARY LC_MESSAGES LC_PAPER LC_NAME LC_ADDRESS \
+            LC_TELEPHONE LC_MEASUREMENT LC_IDENTIFICATION LANG
+
+}
+
+# Generate locale
+function LocaleGen() {
+    local locale_name="${1}"
+    local lang="" enc="" IFS=""
+    IFS=$'.' read -r src_def_input charmap <<< "${locale_name}"
+    sudo localedef -v -i "${src_def_input}" -f "${charmap}" "${locale_name}"
+    SetLocale "${locale_name}"
+}
+
+### Grammer checker
+function grammer_check() {
+    [[ -n $ZSH_VERSION ]] && emulate -LR bash
+    local clean_text json
+    local red green yellow reset
+    local arg="$1"
+    local raw_text
+
+    if [[ -f "${arg}" ]]; then
+        raw_text=$(<"${file}")
+    else
+        raw_text="${*}"
+    fi
+    # Read and sanitize input
+
+    # Remove control characters (except \n and \t)
+    clean_text=$(printf '%s' "$raw_text" | tr -d '\000-\011\013\014\016-\037')
+
+    # Send to LanguageTool
+    json=$(curl -s -X POST "https://api.languagetool.org/v2/check" \
+        --data-urlencode "language=en-US" \
+        --data-urlencode "text=$clean_text")
+
+        # Check for valid JSON
+        if ! echo "$json" | jq . >/dev/null 2>&1; then
+            echo "jq failed to parse the response. Possibly invalid input or corrupted JSON."
+            return 1
+        fi
+
+        red=$(tput setaf 1) green=$(tput setaf 2)
+        yellow=$(tput setaf 3) reset=$(tput sgr0)
+
+        echo "$json" | jq -r --arg red "$red" --arg green "$green" --arg yellow "$yellow" --arg reset "$reset" '
+        if (.matches | length) == 0 then
+            "\($green)No issues found \($reset)"
+        else
+            .matches[] |
+                "\($red)Error:\($reset) \(.message)\n" +
+            "\($yellow)Context:\($reset) \"\(.context.text)\"\n" +
+            "\($green)Suggestion(s):\($reset) " +
+            (if (.replacements | length) > 0 then
+            (.replacements | map(.value) | join(", "))
+        else
+            "None"
+        end) + "\n" +
+            "Offset: \(.offset)\n---"
+        end
+    '
+}
+
+# sysstat: lightweight stats (net + disk)
+function netdisk() {
+    local iface="${1:-$(ip route | grep default | cut -d' ' -f5)}"
+    local dev="${2:-nvme0n1}"
+    local interval="${3:-1}"
+    local should_loop="${4:-0}"
+    local rx tx prev_rx prev_tx rd wr
+
+    local rx_path="/sys/class/net/$iface/statistics/rx_bytes"
+    local tx_path="/sys/class/net/$iface/statistics/tx_bytes"
+    local stat_path="/sys/block/$dev/stat"
+    local st_dir="/sys/block/$dev/statistics"
+
+    [[ ! -e $rx_path ]] && { log error "No such iface: $iface"; return 1; }
+    [[ ! -e $stat_path ]] && { log error "No such block dev: $dev"; return 1; }
+
+    human() {
+        local bytes=$1
+        if (( bytes > 1073741824 )); then
+            awk -v b="$bytes" 'BEGIN{printf "%.2f GiB", b/1073741824}'
+        elif (( bytes > 1048576 )); then
+            awk -v b="$bytes" 'BEGIN{printf "%.2f MiB", b/1048576}'
+        elif (( bytes > 1024 )); then
+            awk -v b="$bytes" 'BEGIN{printf "%.2f KiB", b/1024}'
+        else
+            printf "%d B" "$bytes"
+        fi
+    }
+
+    get_disk_bytes() {
+        if [[ -r "$st_dir/read_bytes" && -r "$st_dir/write_bytes" ]]; then
+            # some block devices export these
+            rd=$(<"$st_dir/read_bytes")
+            wr=$(<"$st_dir/write_bytes")
+            echo "$rd $wr"
+        else
+            # fallback to parsing /stat
+            # field3=sectors_read, field7=sectors_written
+            awk '{print $3*512, $7*512}' "$stat_path"
+        fi
+    }
+
+    # one-shot totals
+    if (( should_loop == 0 )); then
+        rx=$(<"$rx_path") tx=$(<"$tx_path")
+        read -r rd wr < <(get_disk_bytes)
+
+        printf '%b\n' \
+            "" \
+            "Network:" \
+            "   Total Download   $(human "$rx")" \
+            "   Total Upload     $(human "$tx")" \
+            "   Total Net        $(human "$((rx+tx))")" \
+            "" \
+            "Disk:"  \
+            "   Disk I/O"  \
+            "   Disk Read        $(human "$rd")" \
+            "   Disk Write       $(human "$wr")" \
+            ""
+        return 0
+    fi
+
+    # realtime mode
+    prev_rx=$(<"$rx_path") prev_tx=$(<"$tx_path")
+    read -r prev_rd prev_wr < <(get_disk_bytes)
+
+    printf "\n"
+    while :; do
+        sleep "$interval"
+        rx=$(<"$rx_path") tx=$(<"$tx_path")
+        read -r rd wr < <(get_disk_bytes)
+
+        local drx=$((rx - prev_rx))
+        local dtx=$((tx - prev_tx))
+        local drd=$((rd - prev_rd))
+        local dwr=$((wr - prev_wr))
+
+        printf "\033[1A\033[2K"
+        printf "%s | Net ↓ %s/s ↑ %s/s | Disk R %s/s W %s/s\n" \
+            "$(date +%T)" \
+            "$(human $drx)" \
+            "$(human $dtx)" \
+            "$(human $drd)" \
+            "$(human $dwr)"
+
+        prev_rx=$rx prev_tx=$tx prev_rd=$rd prev_wr=$wr
+        (( should_loop > 0 )) && (( --should_loop == 0 )) && break
+    done
+    unset -f get_disk_bytes human
+}
+
+function MpvEQ() {
+    local final_string=""
+    # --af=equalizer=f=[freq]:t=[type]:w=[width[:g=[gain]
+    #   f = frequency
+    #   t = filter type
+    #   w = bandwidth (higher values = wider range)
+    #   g = gain (positive = boost, negative = cut)
+
+    local -a audio_filter=(
+        # Sub-bass (20–60 Hz): Low-end punch and rumble
+        "equalizer=f=20:w=2:g=8"         # 20 Hz, wider range, mild boost for deep rumble
+        "equalizer=f=30:w=2:g=6"          # 30 Hz, slightly less aggressive, still wide
+        "equalizer=f=40:w=2:g=6"          # 40 Hz, moderate boost, still adds fullness
+        "equalizer=f=50:w=2:g=5"          # 50 Hz, good for warmth
+        "equalizer=f=60:w=2:g=4"          # 60 Hz, maintains depth but not overwhelming
+
+        # Bass (80–150 Hz): Punch and body without overwhelming the mids
+        "equalizer=f=80:w=1.5:g=4"        # 80 Hz, boosts bass punch
+        "equalizer=f=100:w=1.5:g=3"       # 100 Hz, gives warmth without muddiness
+        "equalizer=f=120:w=1.5:g=2"       # 120 Hz, subtle boost, ensures balance
+
+        # Lower Mids (200–500 Hz): Adds fullness, can get muddy if overdone
+        "equalizer=f=200:w=1.2:g=-2"      # 200 Hz, slight cut to reduce mud
+        "equalizer=f=250:w=1.2:g=1"       # 250 Hz, small boost to maintain warmth
+        "equalizer=f=300:w=1.2:g=2"       # 300 Hz, slight boost for fullness
+        "equalizer=f=400:w=1.2:g=1"       # 400 Hz, maintaining body without muddiness
+
+        # Mids (500 Hz–2 kHz): Clarity and presence for vocals and instruments
+        "equalizer=f=500:w=1.0:g=-1"      # 500 Hz, cut slightly to prevent boxiness
+        "equalizer=f=700:w=1.0:g=1"       # 700 Hz, slight boost for clarity
+        "equalizer=f=1000:w=1.0:g=2"      # 1 kHz, gives presence to vocals
+        "equalizer=f=1500:w=1.0:g=2"      # 1.5 kHz, boosts instrument clarity
+        "equalizer=f=2000:w=1.0:g=3"      # 2 kHz, crucial for vocal clarity
+
+        # Upper Mids & Presence (2–4 kHz): Adds sharpness and detail to vocals and instruments
+        "equalizer=f=3000:w=1.0:g=3"      # 3 kHz, crispness and clarity to vocals
+        "equalizer=f=4000:w=1.0:g=2"      # 4 kHz, vocal presence, subtle sharpness
+
+        # Treble (5–10 kHz): Adds air, brightness, and sparkle to the mix
+        "equalizer=f=5000:w=1.5:g=2"      # 5 kHz, subtle sparkle and definition
+        "equalizer=f=8000:w=1.5:g=1"      # 8 kHz, increases clarity in cymbals and high instruments
+        "equalizer=f=10000:w=1.5:g=1"     # 10 kHz, adds air and high-end presence
+
+        # Ultra-Treble (12–20 kHz): Airiness and "sheen"
+        "equalizer=f=12000:w=2:g=1"       # 12 kHz, adds subtle airiness
+        "equalizer=f=16000:w=2:g=1"       # 16 kHz, even more air and sparkle
+        "equalizer=f=20000:w=2:g=0.5"     # 20 kHz, high-end sparkle, mild boost
+    )
+
+    for ((i=0;i<${#audio_filter[@]};i++)); do
+        str="${audio_filter[i]}"
+        final_string+="${str}"
+        [[ $(( ${#audio_filter[@]} - 1 )) -gt ${i} && ${i} -gt 0 ]] && final_string+=","
+    done
+
+    printf '%s\n' "${final_string}"
+}
+
+### Set CPU frequencies to certain limits
+function SetPower() {
+    [[ -n $ZSH_VERSION ]] && emulate -LR bash
+    local profile="$1"
+    local -i stapm fast slow apuslow
+    local -i t=1000
+    local -i core_temp=0
+    local -i stapm fast slow apuslow core_temp
+
+    command -v ryzenadj &> /dev/null || {
+        log error "'ryzenadj' not found, install it"
+        return 1
+    }
+
+    case "${profile}" in
+        verylow*|very-low*)
+            stapm=$((5*t)) fast=$((5*t)) slow=$((5*t)) apuslow=$((5*t)) core_temp=60
+            ;;
+        low*)
+            stapm=$((10*t)) fast=$((10*t)) slow=$((8*t)) apuslow=$((8*t)) core_temp=65
+            ;;
+        vibe*|coding*)
+            stapm=$((15*t)) fast=$((15*t)) slow=$((12*t)) apuslow=$((12*t)) core_temp=70
+            ;;
+        balanced*)
+            stapm=$((25*t)) fast=$((25*t)) slow=$((20*t)) apuslow=$((20*t)) core_temp=75
+            ;;
+        high*)
+            stapm=$((45*t)) fast=$((45*t)) slow=$((35*t)) apuslow=$((35*t)) core_temp=80
+            ;;
+        boost*)
+            stapm=$((65*t)) fast=$((65*t)) slow=$((54*t)) apuslow=$((54*t)) core_temp=85
+            ;;
+        stock|default)
+            log info "Your default stock values"
+            stapm=$((65*t)) fast=$((65*t)) slow=$((54*t)) apuslow=$((54*t)) core_temp=90
+            sudo ryzenadj \
+                --stapm-limit=$stapm \
+                --fast-limit=$fast \
+                --slow-limit=$slow \
+                --apu-slow-limit=$apuslow \
+                --stapm-time=$((1*t)) \
+                --slow-time=$((5*t)) \
+                --vrm-current=$((58*t)) \
+                --vrmsoc-current=$((15*t)) \
+                --vrmmax-current=$((110*t)) \
+                --vrmsocmax-current=$((20*t)) \
+                --tctl-temp=$core_temp \
+                --apu-skin-temp=$((42*t)) \
+                --dgpu-skin-temp=$((51*t)) 2> /dev/null
+            return 0
+            ;;
+
+        info)
+            sudo ryzenadj --info 2> /dev/null
+            return 0
+            ;;
+        *)
+            log info "Usage: ${FUNCNAME[0]:-${funcstack[1]}} [verylow|low|balanced|high|boost|stock]"
+            return 1
+            ;;
+    esac
+    sudo ryzenadj --stapm-limit=$stapm --fast-limit=$fast --slow-limit=$slow --apu-slow-limit=$apuslow --tctl-temp=$core_temp 2> /dev/null
+}
+
+# show battery stats
+function BatteryStats() {
+    local bat_base="" bat_full="" bat_now="" bat_power_now="" \
+        bat_status=""
+
+    for bat in /sys/class/power_supply/BAT*/energy_full; do
+        bat_base="${bat%/*}" bat_base="${bat_base##*/}"
+        bat_full="$(</sys/class/power_supply/${bat_base}/energy_full)"
+        bat_now="$(</sys/class/power_supply/${bat_base}/energy_now)"
+        bat_status="$(</sys/class/power_supply/${bat_base}/status)"
+        bat_power_now="$(</sys/class/power_supply/${bat_base}/power_now)"
+
+        awk -v bat_name="${bat_base}" -v bat_now="${bat_now}" -v bat_full="${bat_full}" \
+            -v bat_power_now="${bat_power_now}" -v bat_status="${bat_status}" '
+            BEGIN {
+                printf "battery%%(%s): %0.2f%%\n", bat_name, (bat_now/bat_full)*(100);
+                printf "status(%s): %s\n", bat_name, (bat_status);
+                printf "discharge(%s): %0.2fW\n", bat_name, (bat_power_now/(1000*1000));
+            }
+        '
+    done
+}
+
+function waterfox_dev() {
+    local firefox_profile_name="$1"
+    local firefox_profile_dir="${HOME}/.profiles"
+    local profile="" browser=""
+
+    if command -v waterfox &> /dev/null; then
+        browser="waterfox"
+    elif command -v firefox &> /dev/null; then
+        log info "Waterfox not found, using firefox"
+        browser="firefox"
+    else
+        log error "Waterfox not installed"
+        return 1
+    fi
+
+    mkdir -p "${firefox_profile_dir}"
+
+    if [[ "${firefox_profile_name}" != */* ]]; then
+        profile="${firefox_profile_dir}/${firefox_profile_name:-dev}"
+    else
+        profile="${firefox_profile_name}"
+    fi
+
+    log info "$browser --profile $(ColorPath "${profile}") &> /dev/null & disown"
+
+    $browser --profile "${profile}" &> /dev/null & disown
+
+    if [[ "${XDG_CURRENT_DESKTOP}" == "sway" ]]; then
+        timeout --signal SIGKILL 6s bash -c "
+            while ! swaymsg -t get_tree -r | jq -e '.. | select(type == \"object\" and (.app_id? | type == \"string\" and test(\"^${browser}\")))' &> /dev/null; do
+                sleep 0.01
+            done
+            sleep 0.2
+            swaymsg '[app_id=\"${browser}\"] resize set width 1280 height 888'
+        "
+    fi
+}
+
+# A Human-readable value of a process's memory usage
+function psmem() {
+    local process_name="${1}"
+    local -a cmd_args=()
+
+    if [[ -n "${process_name}" ]]; then
+        cmd_args+=("-p" "$(pgrep -d, "${process_name}")")
+    else
+        cmd_args+=("-e")
+    fi
+    awk '{
+        rss=$3/1024;
+        if (rss>=1024) {
+            gb=sprintf("%.2f GB", (rss/1024));
+            printf "%-20s %s\n", gb, substr($0, index($0,$2));
+        }
+        else {
+            mb=sprintf("%.2f MB", rss);
+            printf "%-20s %s\n", mb, substr($0, index($0,$2));
+        }
+
+    }' <<< "$(ps --no-headers --sort="-%mem" "${cmd_args[@]}" -o'user,group,rss,%mem,%cpu,command')" | less -c -
+}
+
+function pscpu() {
+    local process_name="${1}"
+    local -a cmd_args=()
+    if [[ -n "${process_name}" ]]; then
+        cmd_args+=("-p" "$(pgrep -d, "${process_name}")")
+    else
+        cmd_args+=("-e")
+    fi
+    ps --sort="-%cpu" "${cmd_args[@]}" -o'user,group,%mem,%cpu,command' | less -c -
+}
+
+function ps_tree() {
+    ps -elfy --forest | less -c -
+}
+
+function available_mem() {
+    Mib=$(awk '
+        /MemFree:/            { free      += $4 }
+        /Active\(file\): /    { act_file  += $4 }
+        /Inactive\(file\): /  { inact_file+= $4 }
+        /SReclaimable:/       { reclaim   += $4 }
+        /Shmem:/              { shmem     += $4 }
+        END {
+            total = free + act_file + inact_file + reclaim
+            deduction = shmem
+            reclaimable_file = act_file + inact_file + reclaim
+            if (deduction > 0.5 * reclaimable_file)
+                deduction = 0.5 * reclaimable_file
+                available_kib = total - deduction
+                printf "%.0f", available_kib / 1024
+            }
+    ' /sys/devices/system/node/node*/meminfo)
+
+    printf "Available RAM: %s MiB\n" "${Mib}"
+
+}
+
+function brightness() {
+    local -i desired_brightness=$1
+    local -i max_brightness=$(cat /sys/class/backlight/*/max_brightness)
+    local -i new_brightness=$(awk '{ printf "%.0f", $1 * ($2/100) }' <<< "$max_brightness $desired_brightness" )
+    local brightness_file="$(printf /sys/class/backlight/*/brightness)"
+    log info "Command: echo ${new_brightness} > ${brightness_file}"
+    if ! echo ${new_brightness} > ${brightness_file} 2> /dev/null; then
+        log warn "Previous command failed, running with sudo"
+        log info "Command: sudo bash -c \"echo ${new_brightness} > ${brightness_file}\""
+        sudo bash -c "echo ${new_brightness} > ${brightness_file}" 2> /dev/null
+    fi
+}
+
+function GDB() {
+    local -a args=("${@}")
+    /usr/bin/env gdb -ex 'break main' -ex 'run' -ex 'lay split' "${args[@]}"
+}
+
+### Get Ip and location info for current Network
+function Ip() {
+    command -v curl &> /dev/null || {
+        log error "'curl' not installed"
+            return 1
+        }
+    if command -v bat &> /dev/null; then
+        bat --decorations=never --color=always --paging=never --language json <<< $(curl -s -4 ipinfo.io)
+    else
+        log warn "'bat' not installed"
+        curl -4 ipinfo.io
+    fi
+}
+
+### Update grub
+function update-grub() {
+    local grub_config="/boot/grub/grub.cfg"
+    sudo -v
+    run_cmd__() {
+        local -a cmd=("${@}")
+        log info "${cmd[*]}"
+        "${cmd[@]}" # Run the command list
+    }
+    if [[ -f "${grub_config}.bak" ]]; then
+        run_cmd__ sudo cp "${grub_config}" "${grub_config}_$(date +%d-%b-%Y-%T_%p).bak"
+    else
+        run_cmd__ sudo cp "${grub_config}" "${grub_config}.bak"
+    fi
+    run_cmd__ sudo grub-mkconfig -o "${grub_config}"
+}
+
+### Sort by file size
+function Sort() {
+    local -a total_args=("$@")
+    if [[ ${#total_args} -eq 0 ]];then
+        log error "Please profile items"
+        return 1
+    fi
+    du -sh "${total_args[@]}" | /usr/bin/sort --numeric-sort
+}
+
+# Random MAC address
+function gen_mac() {
+    if command -v od &> /dev/null; then # od from coreutils
+        od -An -N6 -tx1 /dev/urandom | awk '{
+            orig = strtonum("0x" $1)          # first random byte as number
+            high6 = int(and(orig, 252) / 4)   # 252 = 0b11111100 -> keep 6 bits, shift right 2
+            first = high6 + 2                 # add 0b10 -> unicast + locally-administered
+            printf "%02x:%02x:%02x:%02x:%02x:%02x\n",
+            first,
+            strtonum("0x"$2),
+            strtonum("0x"$3),
+            strtonum("0x"$4),
+            strtonum("0x"$5),
+            strtonum("0x"$6)
+        }'
+
+    elif command -v hexdump &> /dev/null; then # hexdump from util-linux or busy-box
+        for i in {1..6}; do
+            printf '%02x' "$(hexdump -ve '/1 "%02x"' -n1 /dev/urandom)"
+            [[ $i -lt 6 ]] && printf ":" || printf '\n'
+        done
+    fi
+}
+
+# Print specific line from a file
+function print_line() {
+    local line="${1:-1}"
+    local file="${2:-}"
+
+    if [[ -z "${line}" || $# -eq 0 ]]; then
+        log usage "${FUNCNAME[0]:-${funcstack[1]}} [LINE] [FILE]"
+        return 1
+    fi
+    awk "NR==${line}" "${file}"
+}
+
+function mpv_vulkan() {
+    [[ -n $ZSH_VERSION ]] && emulate -LR bash
+    local -a args=("${@}")
+    local -a file_items=()
+    local -a dir_items=() all_dir_items=()
+    local -a dirs_=()
+    local -a files=()
+    local -a cmd_flags=()
+    local -a cmd_args=()
+
+    # Separate files, directories, other options
+    for arg in "${args[@]}"; do
+        if [[ -f "${arg}" ]]; then
+            files+=("${arg}")
+        elif [[ -d "${arg}" ]]; then
+            dirs_+=("${arg}")
+        else
+            cmd_args+="${arg}"
+        fi
+    done
+
+    # if there are files use them directly
+    if [[ "${#files[@]}" -gt 0 ]]; then
+        file_items=("${files[@]}")
+    fi
+
+    # if there are directories select files interactively
+    if [[ "${#dirs_[@]}" -gt 0 ]]; then
+        for ((i=0; i<${#dirs_[@]};i++)); do
+            dir="${dirs_[$i]}"
+            cd "${dir}"
+            if [[ -n $BASH_VERSION ]]; then
+                mapfile -t dir_items < <(fzf --multi)
+            elif [[ -n $ZSH_VERSION ]]; then
+                dir_items=("${(@f)"$(fzf --multi)"}")
+            fi
+            dir_items=("${dir_items[@]/#/${dir}/}")
+            all_dir_items+=("${dir_items[@]}")
+            cd - &> /dev/null
+        done
+    fi
+
+    # Prepare command line flags for mpv
+    local -a cmd_flags=(
+        "--vid=auto"
+        "--audio=auto"
+        "--audio-device=pulse"
+        "--volume=94"
+        "--osc=no"
+        "--fullscreen"
+        "--scale=ewa_lanczos4sharpest"
+        "--script-opts=mpris=yes"
+        "--vo=gpu-next"
+        "--hwdec=vulkan"
+        "--gpu-api=vulkan"
+        "--hdr-compute-peak"
+        "--loop-playlist=inf"
+        "--msg-level=ffmpeg/demuxer=error"
+        "--really-quiet"
+    )
+    # Execute the command with necessary flags and files
+    /usr/bin/mpv "${cmd_flags[@]}" "${cmd_args[@]}" "${file_items[@]}" "${all_dir_items[@]}" 2> /dev/null
+}
+
+function ToggleDrivers() {
+    local -a args=("$@")
+
+    toggle_driver_() {
+        local module="${1}"
+        local device="${2}"
+        [[ $# -ne 2 ]] && return 1
+        if lsmod | /usr/bin/grep "^${module}" &> /dev/null; then
+            sudo rmmod -f "${module}" && log info "Disabled ${device}"
+        else
+            sudo modprobe "${module}" && log info "Enabled ${device}"
+        fi
+    }
+
+    for arg in "${args[@]}"; do
+        case ${arg} in
+            [Cc][Aa][Mm]*) # camera
+                toggle_driver_ "uvcvideo" "Camera"
+            ;;
+            [Gg][Pp][Ss]*) # gps
+                toggle_driver_ "" "Gps"
+            ;;
+        esac
+    done
+    unset -f toggle_driver_
+}
+
+### Run with nvidia
+function Nvidia() {
+    local exe="${1}"; shift 1
+    local -a args=("$@")
+
+    [[ -n "$(which "${exe}" 2>/dev/null)" ]] && exe="$(which "${exe}")"
+    if ! [[ ( "${exe:0:1}" = "/" && -r "${exe}" ) || -x "./${exe}" ]]; then
+        log error "exe not executable or found '${exe}'"; return 1;
+    fi
+
+    [[ -n "${exe}" ]] || \
+        { log error "no executable given"; return 1; }
+
+    local -a environment_variables=(
+        "VK_ICD_FILENAMES=${VK_ICD_FILENAMES:-/usr/share/vulkan/icd.d/nvidia_icd.json}"
+        "__VK_LAYER_NV_optimus=${__VK_LAYER_NV_optimus:-NVIDIA_only}"
+        "__GLX_VENDOR_LIBRARY_NAME=${__GLX_VENDOR_LIBRARY_NAME:-nvidia}"
+        "__NV_PRIME_RENDER_OFFLOAD=${__NV_PRIME_RENDER_OFFLOAD:-1}"
+        "DXVK_HUD=${DXVK_HUD:-1}"
+        "MANGOHUD=${MANGOHUD:-1}"
+    )
+    # Run executable
+    env "${environment_variables[@]}" "${exe}" "${args[@]}"
+}; alias nvrun="Nvidia"
+
+### Lauch steam with Nvidia
+function Steam() {
+    DRI_PRIME=1 __NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia steam
+}
+
+### Man but cool man
+function Man() {
+    set -o pipefail
+    local args=("$@")
+    man "${args[@]}" | col -b | \
+        bat --decorations=never \
+        --pager="less -c -RF" \
+        --color=always \
+        --language=markdown;
+}
+
+### cd but with custom messages
+function CD() {
+    [[ -d "${1:-}" ]] || \
+        { printf '[info]: %s\n' "Directory doesn't exist '${dir}'"; return 1; }
+    cd "${1:-}" || \
+        { printf '[error]: %s\n' "failed to chdir to '${dir}'"; return 1; }
+}
+
+function Font() {
+    local font_name="$1"
+    fc-list | grep -o -i "${font_name}.*\." | awk -F'.' '{ print $1 }' | tr '-' ' '
+}
+
+### Remove Unnecessary characters from given string
+function Pretty() {
+    for file in "$@"; do
+        echo "$file" | sed 's/\[[^]]*\]//g' | sed 's/[^A-Za-z0-9._-$@]/_/g' | sed 's/_\+/_/g' 2> /dev/null
+    done
+}
+
+### Play directly from Tar files
+function TarPlay() {
+    local archive="${1}"
+    local -a selected=()
+    local -a tar_opts=()
+
+    [[ -f "${archive}" ]] || { log error "File not found: '${archive}'"; return 1; }
+
+    case "${archive}" in
+        *.tar.gz|*.tgz)  tar_opts=(-z) ;;
+        *.tar.bz2|*.tbz2|*.tbz) tar_opts=(-j) ;;
+        *.tar.xz|*.txz)  tar_opts=(-J) ;;
+        *.tar)           tar_opts=() ;;
+        *) log fatal "Unsupported format: ${archive}"; return 1 ;;
+    esac
+
+    if [[ -n $ZSH_VERSION ]]; then
+        selected="${(@f)$(tar "${tar_opts[@]}" -tf "${archive}" 2>/dev/null | \
+            fzf --multi --prompt="Stream from '${archive}' > " --height=20 --border)}" || return 1
+    elif [[ -n $BASH_VERSION ]]; then
+        mapfile -t selected <(tar "${tar_opts[@]}" -tf "${archive}" 2>/dev/null | \
+            fzf --multi --prompt="Stream from '${archive}' > " --height=20 --border) || return 1
+    fi
+
+    [[ ${#selected[@]} -ne 0 ]] || { log error "No file selected"; return 0; }
+
+    for file in "${selected[@]}"; do
+        while IFS=$'' read -r f; do
+            [[ -n "${f}" ]] || continue
+            log info "Streaming: ${f}"
+            tar "${tar_opts[@]}" -xOf "${archive}" "${f}" 2>/dev/null | \
+                mpv --quiet --term-playing-msg='Now playing: ${filename}' -
+        done <<< "${file}"
+    done
+}
+
+### Lauch sway Window manager with vulkan
+function sway_vulkan() {
+    local -i num_=${1:-0}
+    local logfile="/tmp/sway.log"
+    if ! "$(find ~/.bin/ -type f -name Sway)" ${num_} &>> "${logfile}"; then
+        less -c "${logfile}"
+    fi
+}
+
+function Cat() {
+    local -a args=("${@}")
+    bat --theme-dark=TwoDark \
+        --color=always \
+        --paging=never \
+        --decorations=never "${args[@]}" | less -c -
+}
+
+function ASCIIfy() {
+    for arg in "${@}"; do
+        if [[ -f "${arg}" ]]; then
+            # tr -cd "A-Za-z'\`\!@#$%^&*()_+-=[]{} \\\\|\":;<>?,./\n" < "${arg}"
+            tr -cd "[({A-Za-z@#$%^&*_+-=:;<>?,./'\`\!\ \\\\|\"})]’\n" < "${arg}"
+        else
+            printf '%b\n' "${arg}" | \
+                tr -cd "[({A-Za-z@#$%^&*_+-=:;<>?,./'\`\!\ \\\\|\"})]\n"
+        fi
+    done
+}
+
+function CurrencyConverter() {
+    local curr1="${1:-}" curr2="${2:-}"
+    local amount="${3:-}"
+
+    [[ -n "${curr1}" ]] ||  \
+        { log error "curr1 is unset"; return 1; }
+    [[ -n "${curr2}" ]] ||  \
+        { log error "curr2 is unset"; return 1; }
+    [[ -n "${amount}" ]] ||  \
+        { log error "amount is unset"; return 1; }
+
+    local exchange_url="" rate="" result=""
+    exchange_url="https://api.frankfurter.app/latest?from=${curr1}&to=${curr2}"
+    rate="$(curl -fsSL "${exchange_url}" | jq -r '.rates.[]')"
+    result=$(awk -v rate="${rate}" -v amount="${amount}" 'BEGIN { printf "%.2f\n", (rate*amount); }')
+    log "*" "source: ${exchange_url}"
+    log "*" "rate: 1 ${curr1} -> ${rate} ${curr2}"
+    log "*" "amount: ${amount} ${curr1} => ${result} ${curr2}"
+}; alias usd_to_inr="CurrencyConverter USD INR"; alias inr_to_usd="CurrencyConverter INR USD"
+alias dollar_to_rupee="CurrencyConverter USD INR"; rupee_to_dollar="CurrencyConverter INR USD";
+
+function notify() {
+    [[ -n $ZSH_VERSION ]] && emulate -LR bash
+    local -a args=("${@}")
+    local application_name="custom_msg" msg="" notification_type=""
+    local title=""
+    local -i time=3000
+    local -a notification_type_group=( dialog-information system-error )
+    notification_type="${notification_type_group[0]}"
+    for ((i=0;i<${#args[@]};i++)); do
+        # [[ $i -eq 0 ]] && { { [[ -n "${args[0]}" ]] && title="${args[0]:-}"; } || return 1; continue; }
+        # [[ $i -eq 1 ]] && { { [[ -n "${args[1]}" ]] && msg="${args[1]:-}"; } || return 1; continue; }
+        arg="${args[$i]:-}"
+        if [[ "${arg}" == *=* ]]; then
+            value="${arg##*=}"
+            arg="${arg%%=*}"
+        else
+            value="${args[$((i+1))]:-}"
+            arg="${arg}"
+        fi
+        case "${arg}" in
+            -t|-*time) time="${value}" ;;
+            [0-9]*) time="${arg}" ;;
+            type|log*) notification_type="${value}" ;;
+            app*|name) application_name="${value}" ;;
+            title) title="${value}" ;;
+            msg*|mess*) msg="${value}" ;;
+            -*help|help*) log info "Usage: ${0##*/} title=[title] msg=[message] [other_args]"; return 0;;
+            *) log error "'${arg}' invalid argument"; return 1;;
+        esac
+    done
+    local -a gdbus_cmd=(
+        "--session"
+        "--dest" "org.freedesktop.Notifications"
+        "--object-path" "/org/freedesktop/Notifications"
+        "--method" "org.freedesktop.Notifications.Notify"
+    )
+    gdbus call "${gdbus_cmd[@]}" "${application_name}" 0 "${notification_type}" "${title}" "${msg}" "[]" "{}" "int32 ${time}" 1> /dev/null
+}
+
+function start_docker() {
+    local -a args=("${@}")
+    local data_root="$HOME/data/docker"
+    local logfile="/tmp/docker.log"
+    local -i should_stop=0 restart_docker=0
+    for ((i=0;i<${#args[@]};i++)); do
+        arg="${args[$i]}"
+        next_arg="${args[$((i+1))]}"
+        case "${arg}" in
+            stop) should_stop=1 ;;
+            -f|-r|-*resart|resart) restart_docker=1 ;;
+            -*root) data_root="${next_arg}" ;;
+            *) log error "invalid arg: '${arg}'" ;;
+        esac
+    done
+
+    local -a dockerd_cmd_args=(
+        "--debug"
+        "--raw-logs"
+        "--data-root=${data_root}"
+    )
+
+    is_docker_running() {
+        pgrep -xf "dockerd ${dockerd_cmd_args[*]}" &> /dev/null
+    }
+    kill_docker() {
+        sudo pkill -SIGTERM -xf "dockerd ${dockerd_cmd_args[*]}"
+    }
+
+    if [[ $restart_docker -eq 1 || $should_stop -eq 1 ]]; then
+        if is_docker_running; then
+            log info "Killing existing process"
+            local -i start_time=$(date +%s) timeout=4
+            while is_docker_running && [[ $(( $(date +%s) - start_time )) -lt $timeout ]] && sleep 0.12; do kill_docker; done
+            [[ $should_stop -eq 1 ]] && { log info "Docker daemon is stopped"; return 0; }
+        else
+            log error "Docker daemon is not running"
+        fi
+        [[ $should_stop -eq 1 ]] && return 0
+    fi
+    sudo mkdir -p "${data_root}"
+    { printf '%b' "\n\n\n\n"; for i in {0..20}; do printf '=='; done; printf '%b' "\n"; } | sudo tee "${logfile}" &> /dev/null
+    if is_docker_running && [[ $restart_docker -ne 1 ]]; then
+        log warn "An instance of docker daemon is already running; use -f or -r to restart"
+        return 1
+    fi
+    sudo bash -c "dockerd ${dockerd_cmd_args[*]} &>> "${logfile}" &> /dev/null & disown"
+    timeout 4s bash -c "while ! pgrep -xf \"dockerd ${dockerd_cmd_args[*]}\" &> /dev/null && sleep 0.12; do :; done" || \
+        { log error "Failed to find running instance of dockerd; dockerd failed to execute"; return 1; }
+    declare -a pid=($(pgrep -xf "dockerd ${dockerd_cmd_args[*]}"))
+    log info "Docker started: ${pid[*]}"
+    log info "Logs available at '${logfile}'"
+    id -nG "${USER}" | grep -q docker || \
+        log warn "You are not in the docker group; add yourself to docker group: sudo usermod -aG docker $USER"
+}; alias stop_docker="start_docker stop"
+
+### Remove Unnecessary characters from given file
+function Pretty_rename() {
+    for file in "$@"; do
+        mv -- "${file}" "$( \
+            printf '%s\n' "${file}" | \
+            sed 's/\[[^]]*\]//g' | \
+            sed 's/[^A-Za-z0-9._-$@]/_/g' | \
+            sed 's/_\+/_/g' \
+        )" 2> /dev/null
+    done
+}
+
+function PrefixRename() {
+    local prefix="${1:-}"
+    [[ -n "${prefix}" ]] || { log error "no prefix pattern given"; return 1; }
+    while IFS= read -r file; do
+        if [[ "${file}" == "${prefix}"* ]]; then
+            printf '%s\n' "Skipping '${file}'"
+        elif [[ -d "${file}" ]]; then
+            printf '%s\n' "Skipping directory '${file}'"
+        else
+            [[ -f "${file}" ]] && mv -v "${file}" "${prefix}${file}"
+        fi
+    done < <( \
+        find . -mindepth 1 -maxdepth 1 \
+            \( -type f -o \( -type l -a -xtype f \) \) \
+            -printf "%P\n" \
+    )
+}
+
+### Get randomcolors quickly
+function RandomColors() {
+    local format="$1"
+    pastel random | pastel format "${format:-hex}"
+}
+
+function Cd() {
+    local dir="${1}"
+    if mkdir -p "${dir}"; then
+        cd -- "${dir}" || \
+            { log error "cannot chdir '${dir}'"; return 1; }
+    else
+        log error "failed to mkdir '${dir}'"
+    fi
+}
+
+function time-in-seconds() {
+    local given_time="${1:-}"
+    [[ -n "${given_time}" ]] || \
+        { log error "time format: HH:MM:SS.00"; return 1; }
+    awk -F: 'END { printf "%.2f\n", ( (($1*3600)+($2*60)+$3) ) }' \
+        <<< "${given_time}"
+}
+
+function log-today() {
+    local current_dir="" central_log_dir="" log_file="" \
+        current_time_24_fmt="" current_time_12_fmt="" header_string="" \
+        editor="${EDITOR:-vim}"
+    central_log_dir="$HOME/notes/logs"
+    if [[ -d "${central_log_dir}" ]] || \
+            mkdir -p "${central_log_dir}"; then
+        cd -- "${central_log_dir}" || \
+        { log error "failed to chdir '${central_log_dir}'"; return 1; }
+    else
+        log error "directory doesn't exist or failed to create '${central_log_dir}'"
+        return 1
+    fi
+    current_time_24_fmt="$(date +%T)"
+    current_time_12_fmt="$(date +"%I:%M:%S %p")"
+    log_file="${TODAY:-$(date +%F)}"
+    header_string="# Date: $log_file, created $current_time_24_fmt ($current_time_12_fmt)\n\n\n# vim: sts=4 sw=4 ft=vdf et:\n"
+
+    current_dir="$(readlink -f .)"
+    dir_tail="${current_dir##*/}"
+    if [[ "${dir_tail}" =~ (log|logs) ]]; then
+        [[ ! -s "${log_file}" ]] && \
+            printf '%b\n' "${header_string}" >> "${log_file}"
+        "${editor}" "${log_file}"
+        cd - &>/dev/null || \
+        { log error "failed to chdir OLDPWD"; return 1; }
+    else
+        log error "current directly is not named log/logs"
+    fi
+}
+
+# yazi filemanager with auto cd
+function y() {
+    local tmp="" dir=""
+    tmp="$(mktemp)"
+    env TMPDIR="/run/user/$UID/tmp/" yazi "${@}" --cwd-file="${tmp}"
+    dir="$(<"${tmp}")"
+    builtin cd -- "${dir}" || \
+        { log error "cannot chdir '${dir}'"; return 1; }
+    rm -f "${tmp}"
+}; alias yc="clear; y"
+
+function run_cmd() {
+    log "*" "running: command ${*}"
+    command "${@}"
+}
+
+### Start SSH agent on initial login
+function SSH_Agent() {
+    local dir="${XDG_RUNTIME_DIR}"
+    local ssh_data_file="${dir}/ssh_agent.txt"
+    if [[ ! -s "${ssh_data_file}" ]]; then
+        mkdir -p "${dir}" || return 1
+        printf '%s\n' "$(ssh-agent -s)" &> "${ssh_data_file}"
+    else
+        source "${ssh_data_file}" &> /dev/null
+    fi
+}
+
+function main() {
+    # ApplyShellTheme
+    SetAndExportVars
+    SetPath
+    Bash_and_ZSH_setup
+    SetLocale
+    Alias_vars
+    SSH_Agent
+}
+

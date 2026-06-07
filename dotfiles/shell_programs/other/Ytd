@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+VERBOSE=0
+
+PATH="${PATH:-/usr/local/bin:/usr/bin:/bin}"
+
+function log() {
+    local _type="${1:-}"; shift
+    local _color="" _t=""
+
+    local info_color="\e[38;2;85;255;126m" warn_color="\e[38;2;255;170;10m" \
+        error_color="\e[38;2;244;29;31m" fatal_color="\e[5m\e[38;2;255;0;0m" \
+        other_color="\e[38;2;251;255;208m" nc="\e[0m"
+
+    case "${_type}" in
+        info) _color="${info_color:-}" _t="*" ;;
+        warn) _color="${warn_color:-}" _t="^" ;;
+        error) _color="${error_color:-}" _t="!" ;;
+        fatal) _color="${fatal_color:-}" _t="#" ;;
+        *) _color="${other_color:-}" _t="" ;;
+    esac
+
+    printf "[%b%s%b%s]: %b\n" "${_color}" "${_type}" "${nc}" "${_t}" "${*//$HOME/\~}"
+}
+
+run_cmd() {
+    local -a cmd_args=("${@}")
+    local yt_dlp_path=""
+    if ! yt_dlp_path="$(which yt-dlp 2>/dev/null)"; then
+        if ! [[ -f ~/.local/bin/yt-dlp ]] && yt_dlp_path="$HOME/.local/bin/yt-dlp"; then
+            log error "yt-dlp program not found"; return 1
+        fi
+    fi
+    [[ "$VERBOSE" -eq 1 ]] && log cmd_info "${yt_dlp_path} ${cmd_args[*]@Q}"
+    "${yt_dlp_path}" "${cmd_args[@]}"
+}
+
+function update_yt-dlp() {
+    [[ -f ~/.local/bin/yt-dlp ]] && \
+        { log info "upgrading pipx yt-dlp" && pipx upgrade --pip-args=--pre yt-dlp; }
+    log info "upgrading system yt-dlp"
+    sudo yt-dlp --update-to nightly
+}
+
+function main() {
+    local -a args=("${@}")
+
+    consume_val() {
+        local -n var_ref=${1}
+        local value="${2:-}"
+        local -n index_ref=${3}
+        local arg="${4:-}"
+        if [[ -z "${value}" ]]; then
+            [[ -n "${arg}" ]] && log errror "'${arg}' requires a value"
+            return 1
+        fi
+        var_ref="${value}" index_ref=$((index_ref+1))
+    }
+
+    local quality=""
+    local -i no_video=0 no_audio=0
+
+    local value="" arg="" video_f="" \
+        audio_f="" out_ext="" output_format="" \
+        format_str="" url=""
+
+    for ((i=0;i<${#args[@]};i++)); do
+        arg="${args[i]:-}"
+        [[ $(( ${#args[@]} - i )) -ge 1 && \
+            ( -n "${args[i+1]:-}" && "${args[i+1]:-}" != -* ) ]] && \
+                value="${args[i+1]:-}"
+
+        case "${arg}" in
+            -b|--best) consume_val video_f "" i || true                             ;;
+            -w|--worst) i=$((i-1)); consume_val video_f "[height<=144]" i           ;;
+            -a|--avg|--average) i=$((i-1)); consume_val video_f "[height<=720]" i   ;;
+            -g|--good) i=$((i-1)); consume_val video_f "[height<=1080]" i           ;;
+            -v|--verbose) VERBOSE=1                                                 ;;
+            -U|--update) update_yt-dlp; return 0                                    ;;
+            -vn|-nv) no_video=1                                                     ;;
+            -an|-na) no_audio=1                                                     ;;
+            -q|--quality) consume_val video_f "${value}" i "${arg}"                 ;;
+            -o|--output) consume_val output_format "${value}" i "${arg}"            ;;
+            -f|--format) consume_val out_ext "${value}" i "${arg}"                  ;;
+            --[0-9]*) i=$((i-1)); consume_val video_f "[height<=${arg##*-}]" i      ;;
+            *)
+                url="${arg}"
+        esac
+    done
+
+    if [[ "$no_video" -eq 1 && "$no_audio" -eq 1 ]]; then
+        log error "no media left to download"; return 1
+    elif [[ "$no_video" -eq 1 ]]; then
+        run_cmd \
+            -f "bestaudio${audio_f}" \
+            --convert-thumbnails jpg \
+            --embed-thumbnail \
+            --embed-metadata \
+            --embed-chapters \
+            --parse-metadata ":(?P<meta_description>)" \
+            --extract-audio \
+            --audio-quality 0 \
+            --js-runtimes node \
+            --remote-components ejs:github \
+            --audio-format opus \
+            --output "${output_format:-%(title)s.%(ext)s}" "${url}"
+        return 0
+
+    elif [[ "$no_audio" -eq 1 ]]; then
+        format_str="bestvideo${video_f}"
+    else
+        format_str="bestvideo${video_f}+bestaudio${audio_f}"
+    fi
+
+    run_cmd \
+        -f "${format_str}" \
+        --merge-output-format "${out_ext:-mkv}" \
+        --embed-thumbnail \
+        --embed-metadata \
+        --embed-chapters \
+        --parse-metadata ":(?P<meta_description>)" \
+        --js-runtimes node \
+        --remote-components ejs:github \
+        --audio-quality 0 \
+        --output "${output_format:-%(title)s.%(ext)s}" "${url}"
+}
+
+main "${@}"
+

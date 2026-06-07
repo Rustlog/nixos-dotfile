@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+
+SCRIPT_PATH="/usr/local/bin/InitZram"
+ZRAM_INFO_FILE="/var/tmp/zram-info"
+SERVICE_NAME="initzram"
+ZRAM_FACTOR="4"
+ZRAM_ALGO="zstd"
+DEFAULT_ZRAM_SIZE="1G"
+
+function log() {
+    local _type="${1}"; shift 1
+    printf '[%s]: %s\n' "${_type}" "${*//$HOME/\~}"
+}
+
+function Install() {
+    local src="${1:-}" dest="${2:-}" owners="${3:-root:root}" mode="${4:-0644}"
+    local log_info_msg="${5:-}" log_error_msg="${6:-}"
+    [[ -n "${dest}" ]] || log error "No dest file given"
+    sudo mkdir -p "${dest%/*}"
+    if [[ -n "${src}" && -f "${src}" ]]; then
+        sudo mv "${src}" "${dest}" || \
+            { log error "${log_error_msg}"; return 1; }
+    fi
+    [[ -f "${dest}" ]] || sudo touch "${dest}"
+    if ! (sudo chown "${owners}" "${dest}" && sudo chmod "${mode}" "${dest}"); then
+        log error "${log_error_msg}"; return 1
+    fi
+    log info "${log_info_msg}"
+}
+
+function ShowUsage() {
+    printf '%b\n' \
+        "usage: ${0##*/} -i [optional_flags]" \
+        "   -s,--service       service name" \
+        "   -p,--script-path   scritp path to be saved (default: ${SCRIPT_PATH})" \
+        "   -i,--install       init install" \
+        "   --zram-factor      zram factor (default: 1/${ZRAM_FACTOR} of host RAM)" \
+        "   --algo,--zram-algo zram algorithm (default: ${ZRAM_ALGO})" \
+        ""
+}
+
+function ScriptContent() {
+    cat << EOF
+#!/bin/sh
+
+exec 2>&1
+
+log() {
+    _type="\${1}"; shift 1
+    printf '[%s]: %s\\n' "\${_type}" "\${*}"
+}
+
+## Global variables
+LOG_INFO_TO_FILE="\${1:-0}"
+ZRAM_DEV="" ZRAM_SIZE="" ZRAM_ALGO="" ZRAM_INFO_FILE=""
+ZRAM_SIZE="${DEFAULT_ZRAM_SIZE}"
+ZRAM_ALGO="${ZRAM_ALGO}"
+ZRAM_INFO_FILE="${ZRAM_INFO_FILE}"
+
+while [ ! -f /proc/meminfo ]; do sleep 0.4; done
+
+lsmod | grep zram || { modprobe zram && sleep 0.6; }
+
+ZRAM_DEV="\$(zramctl --find)"
+
+[ -n "\${ZRAM_DEV}" ] || { log error "Failed to find ZRAM device"; exit 1; }
+
+ZRAM_SIZE=\$( \\
+    awk '/MemTotal:/ { printf "%dM\\n", int( ( (\$2)/(1024) ) / $ZRAM_FACTOR ) }' \\
+        /proc/meminfo
+)
+
+[ -n "\${ZRAM_SIZE}" ] || { log error "Failed to get size for ZRAM"; exit 1; }
+
+## Create a ZRAM device
+zramctl --size="\${ZRAM_SIZE}" --algorithm="\${ZRAM_ALGO}" "\${ZRAM_DEV}" || \\
+    { log error "Failed to create ZRAM device"; exit 1; }
+
+## Create swap
+mkswap -U clear "\${ZRAM_DEV}" || exit 1 # Clear filesystem UUID and create swap
+swapon -o pri=100,discard=once,pages "\${ZRAM_DEV}" || exit 1 # Enable swap
+
+log info "ZRAM swap: \${ZRAM_DEV} (\${ZRAM_SIZE}, \${ZRAM_ALGO})"
+
+sudo mkdir -p "\${ZRAM_INFO_FILE%/*}"
+
+[ "\$LOG_INFO_TO_FILE" -eq "1" ] || exit 0
+
+printf '%s\\n' "zram swap: \${ZRAM_DEV} (size: \${ZRAM_SIZE}, algo: \${ZRAM_ALGO})" \\
+    > "\${ZRAM_INFO_FILE}"
+
+EOF
+}
+
+function InstallScript() {
+    local script_content="" tmp_file=""
+    sudo mkdir -p "${SCRIPT_PATH%/*}"
+    script_content="$(ScriptContent)"
+    tmp_file="$(mktemp)"
+    printf '%s\n' "${script_content}" > "${tmp_file}"
+    Install "${tmp_file}" "${SCRIPT_PATH}" "root:root" "0755" \
+        "successfully installed script '${SCRIPT_PATH}'" \
+        "failed to install script '${SCRIPT_PATH}'"
+}
+
+function InstallZramOnRunit() {
+    local content="" tmp_file="" service_dir="/etc/sv"
+    local service_path="${service_dir}/${SERVICE_NAME}/run"
+    local log_service_path="${service_dir}/${SERVICE_NAME}/log/run"
+    tmp_file="$(mktemp)"
+    content="$( \
+    cat << EOF
+#!/bin/sh
+
+exec 2>&1
+
+INFO_MSG="${SERVICE_NAME}"
+SHOULD_LOG_TO_FILE=1
+ZRAM_INFO_FILE="${ZRAM_INFO_FILE}"
+
+${SCRIPT_PATH} "\$SHOULD_LOG_TO_FILE"
+
+if [ -n "\${ZRAM_INFO_FILE}" ] && [ -f "\${ZRAM_INFO_FILE}" ]; then
+    INFO_MSG="\$(cat "\${ZRAM_INFO_FILE}")"
+fi
+
+if ! command -v chpst 1> /dev/null 2>&1; then
+    tail -f /dev/null
+fi
+
+cd "\${ZRAM_INFO_FILE%/*}" || true
+rm ./"\${ZRAM_INFO_FILE##*/}" || true
+
+exec chpst -b "\${INFO_MSG}" pause
+
+EOF
+)"
+    printf '%s\n' "${content}" > "${tmp_file}"
+    Install "${tmp_file}" "${service_path}" "root:root" "0755" \
+        "successfully installed service '${service_path}'" \
+        "failed to install service '${service_path}'"
+
+    tmp_file="$(mktemp)"
+    content="$( \
+    cat << EOF
+#!/bin/sh
+
+exec vlogger -t ${SERVICE_NAME} -p daemon
+
+EOF
+)"
+    printf '%s\n' "${content}" > "${tmp_file}"
+    Install "${tmp_file}" "${log_service_path}" "root:root" "0755" \
+        "successfully installed log service '${log_service_path}'" \
+        "failed to install log service '${log_service_path}'"
+}
+
+
+function InstallZramOnSytemd() {
+    :
+}
+
+function main() {
+    local -a args=("${@}")
+
+    local -i install_init=0
+
+    local arg="" override_service_name="" \
+        override_script_path="" override_zram_algo="" \
+        override_zram_factor=""
+
+    for ((i=0;i<${#args[@]};i++)); do
+        arg="${args[i]}"
+        [[ ( "$((${#args[@]} - i))" -ge 1 && -n "${args[$((i+1))]:-""}" ) && \
+            "${args[$((i+1))]:-""}" != -* ]] && \
+            value="${args[$((i+1))]:-""}" i=$((i+1))
+        if [[ "${arg}" == -* && "${arg}" == *=* ]]; then
+            IFS=$'=' read -r arg value <<< "${arg}"
+            [[ -n "${value}" ]] || \
+                { log error "'${arg}' requires a value"; return 1; }
+        fi
+        case "${arg}" in
+            -s|--service*)          override_service_name="${value}"    ;;
+            -p|--script-path)       override_script_path="${value}"     ;;
+            --zram-factor)          override_zram_factor="${value}"     ;;
+            --algo*|--zram-algo*)   override_zram_algo="${value}"       ;;
+            --install)              install_init=1                      ;;
+            -h|--help)              ShowUsage; return 0                 ;;
+        esac
+    done
+
+    [[ "$install_init" -eq 1 ]] || \
+        { log error "use --install flag to install service"; return 0; }
+
+    # Overrides
+    [[ -n "${override_service_name}" ]] && \
+        SERVICE_NAME="${override_service_name}"
+    [[ -n "${override_zram_algo}" ]] && \
+        ZRAM_ALGO="${override_zram_algo}"
+    [[ -n "${override_zram_factor}" ]] && \
+        ZRAM_FACTOR="${override_zram_factor}"
+    [[ -n "${override_script_path}" ]] && \
+        SCRIPT_PATH="${override_script_path}"
+
+    if command -v runit &> /dev/null; then
+        log info "Init system 'runit'"
+        InstallScript || return 1
+        InstallZramOnRunit
+        current_service_dir="/var/service"
+        [[ -L "${current_service_dir}" ]] || \
+            current_service_dir="/etc/runit/runsvdir/current"
+        sudo ln -svf "/etc/sv/${SERVICE_NAME}" "${current_service_dir}"
+        { sudo sv start "${SERVICE_NAME}" && log info "started service '${SERVICE_NAME}'"; } || \
+            log error "failed to start service '${SERVICE_NAME}'"
+    elif command -v systemctl &> /dev/null; then
+        log info "Init system 'systemd'"
+        InstallScript || return 1
+        InstallZramOnSytemd
+    else
+        log error "unknown init system"
+    fi
+}
+
+main "${@}"
+

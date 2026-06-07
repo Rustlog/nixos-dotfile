@@ -1,0 +1,284 @@
+// -*- mode: jsonc -*-
+{
+    // Waybar config
+
+    // "layer": "top",
+    // Waybar position (top|bottom|left|right)
+    "position": "top",
+    // Waybar height (to be removed for auto height)
+    "height": 10,
+    "width": 1910,
+    "spacing": 2,
+    "mode": "dock",
+
+    // Order of the modules
+    "modules-left": [
+        // "custom/launcher",
+        // "custom/seperator",
+        "cpu",
+        "custom/seperator",
+        "memory",
+        "custom/seperator",
+        "temperature",
+        "custom/seperator",
+        "custom/cava",
+        "mpris"
+    ],
+    "modules-center": [
+        "sway/workspaces",
+    ],
+    "modules-right": [
+        "pulseaudio",
+        "custom/seperator",
+        "network",
+        "custom/seperator",
+        "backlight",
+        // "custom/seperator",
+        // "keyboard-state",
+        "custom/seperator",
+        "sway/language",
+        "custom/seperator",
+        "battery",
+        "custom/seperator",
+        "clock",
+        "custom/seperator",
+        "tray",
+        "custom/seperator",
+        "custom/power",
+    ],
+
+    // Now playing
+    "mpris": {
+        "dynamic-order": ["title", "artist", "album"],
+        "dynamic-importance-order": ["title", "artist", "album"],
+        "format": "{player_icon} {dynamic}",
+        "tooltip-format": "{player} ({status})\n{dynamic}\n{length}\n",
+        "format-paused": "############################",
+        "max-length": 40,
+        "player-icons": {
+            "default": "",
+            "mpv": "🎵",
+            "firefox": " ",
+            "spotify": " "
+        }
+    },
+
+    // Cava on the top
+    "custom/cava": {
+        "exec": "$(find ~/.config/sway/ -type f -name WaybarCava) 0 74 10 2>/dev/null",
+        "on-click": "pkill -SIGUSR1 -f '.*scripts/WaybarCava 0 74 10'",
+        "return-type": "json",
+        "format": "{}"
+    },
+
+    // Application launcher
+    "custom/launcher": {
+        "on-click": "nwg-drawer -mb 200 -ml 400 -mr 450 -mt 200",
+        "tooltip": false,
+        "format": "  "
+    },
+
+    "custom/seperator": {
+        "format": "",
+        "format": "|",
+        "format": "*",
+        "tooltip": false
+    },
+
+    "sway/language": {
+        "format": "{}",
+        "on-click": "swaymsg input type:keyboard xkb_switch_layout next"
+    },
+
+    "sway/workspaces": {
+        "disable-scroll": true,
+        "disable-click": true,
+        "warp-on-scroll": false,
+        "format": "{name} {icon}",
+        "format-icons": {
+            "urgent": "",
+            "focused": "",
+            "default": "",
+            "active": ""
+        },
+        "sort-by-number": true,
+        "all-outputs": true,  // Show workspaces from all outputs
+        "active-only": false,  // Show all workspaces, not just active ones
+        "persistent-workspaces": {
+            "1": [],  // Always show workspace 1
+            "2": [],  // Always show workspace 2
+            "3": [],  // Always show workspace 3
+            "4": [],  // Always show workspace 4
+            // "5": [],  // Always show workspace 5
+            // "6": []   // Always show workspace 6
+        }
+    },
+
+    "keyboard-state": {
+        "numlock": true,
+        "capslock": true,
+        "format": {
+            "numlock": "Num {icon}",
+            "capslock": "Caps {icon}"
+        },
+        "format-icons": {
+            "unlocked": "",
+            "locked": " "
+        }
+    },
+
+    "wlr/scratchpad": {
+        "format": "{icon} {count}",
+        "show-empty": false,
+        "format-icons": ["", ""],
+        "tooltip": true,
+        "tooltip-format": "{app}: {title}"
+    },
+
+    "tray": {
+        "icon-size": 20,
+        "spacing": 10
+    },
+
+    "clock": {
+        "tooltip": true,
+        "format-alt": "{:%a, %d %b (%I:%M %p) %Y}  ",
+        "format": "{:%I:%M %p}   ",
+        "tooltip-format": "<tt><small>{calendar}</small></tt>",
+        "calendar": {
+            "mode"          : "year",
+            "mode-mon-col"  : 3,
+            "weeks-pos"     : "right",
+            "on-scroll"     : 1,
+            "format": {
+                "months":     "<span color='#FFEAD3'><b>{}</b></span>",
+                "days":       "<span color='#CDAAEF'><b>{}</b></span>",
+                "weeks":      "<span color='#99FFDD'><b>W{}</b></span>",
+                "weekdays":   "<span color='#FFCC66'><b>{}</b></span>",
+                "today":      "<span color='#FF6699'><b><u>{}</u></b></span>"
+            }
+        },
+        "actions":  {
+            "on-click-right": "mode",
+            "on-scroll-up": "tz_up",
+            "on-scroll-down": "tz_down",
+            "on-scroll-up": "shift_up",
+            "on-scroll-down": "shift_down"
+        }
+    },
+
+    "cpu": {
+        "tooltip": true,
+        "interval": 1,
+        "format": "   {icon0}{icon1}{icon2}{icon3}{icon4}{icon5}{icon6}{icon7}{icon8} {usage:>2}%",
+        "format-icons": [
+            "<span color='#69FF94'>▁</span>", // green
+            "<span color='#2AA9FF'>▂</span>", // blue
+            "<span color='#F8F8F2'>▃</span>", // white
+            "<span color='#F8F8F2'>▄</span>", // white
+            "<span color='#FFFFA5'>▅</span>", // yellow
+            "<span color='#FFFFA5'>▆</span>", // yellow
+            "<span color='#FF9977'>▇</span>", // orange
+            "<span color='#DD532E'>█</span>"  // red
+        ],
+        "min-length": 5,
+        "on-click-right": "env XDG_CURRENT_DESKTOP=kde plasma-systemmonitor"
+    },
+
+    "memory": {
+        "interval": 1,
+        "tooltip": true,
+        "format": "  {used:0.2f}G / {total:0.2f}G",
+        "tooltip-format": "Used: {used:0.2f}G\nAvailable: {total:0.2f}G",
+    },
+
+    "temperature": {
+        "interval": 1,
+        "warning-threshold": 65,
+        "critical-threshold": 78,
+        "format-critical": "{temperatureC}°C {icon}",
+        "format": "{icon} {temperatureC}°C",
+        "format-icons": " ",
+        // "hwmon-path": "/sys/class/hwmon/hwmon2/temp1_input",
+        // "thermal-zone": 2,
+    },
+
+    "backlight": {
+        // "device": "acpi_video1",
+        "format": "{percent}% {icon}",
+        "format-icons": ["", "", "", "", "", "", "", "", ""]
+    },
+
+    "battery": {
+        "interval": 6,
+        "states": {
+            "good": 96,
+            "warning": 40,
+            "critical": 24
+        },
+        "format": " {capacity}% {icon} ",
+        "format-full": " {capacity}% {icon} ",
+        "format-charging": " {capacity}%  ",
+        "format-plugged": "{capacity}%  ",
+        // "format-good": "", // An empty format will hide the module
+        "format-icons": ["", "", "", "", ""]
+    },
+
+    "network": {
+        "interval": 1,
+        "tooltip": true,
+        "format": "󰤮  Wifi disabled",
+        "format-wifi": "    {bandwidthDownBits}  {bandwidthUpBits}",
+        "format-alt": "   {essid} ({ifname})",
+        "format-linked": "{ifname} ",
+        "format-ethernet": "{ifname} 󰌘 ",
+        "format-disconnected": "󰌙 Disconnected",
+        "tooltip-format": "ssid: {essid}\nspeed:  {bandwidthDownBits}  {bandwidthUpBits}\nip: {ipaddr}\nGateway: {gwaddr}\nmac: {bssid}\nstrength: {signalStrength}%\nnetmask(4): {netmask}\nnetmask(6): {netmask6}\nfrequency: {frequency}Ghz",
+        "tooltip-format-disconnected": "󰌙 Disconnected",
+        "on-click-right": "foot -a Floating -w 1261x597 bash -c 'nmcli -colors=yes dev wifi list --rescan yes; read -r -n 1 -s'",
+        "on-double-middle": "notify-send -t 1000 'Double click'",
+        "on-scroll-up": "[ \"$(nmcli radio wifi)\" = \"disabled\" ] && nmcli radio wifi on && notify-send -t 200 'Wifi turned on'",
+        "on-scroll-down": "[ \"$(nmcli radio wifi)\" = \"enabled\" ] && nmcli radio wifi off && notify-send -t 200 'Wifi turned off'"
+    },
+
+    "pulseaudio": {
+        "scroll-step": 1, // %, can be a float
+        "format": "{volume}% {icon} {format_source}",
+        "format-bluetooth": "{volume}% {icon}  {format_source}",
+        "format-bluetooth-muted": " {icon}  {format_source}",
+        "format-muted": "  {format_source}",
+        "format-source": "{volume}%  ",
+        "on-click": "env GTK_THEME=Breeze:dark pavucontrol",
+        "on-click-right": "env XDG_CURRENT_DESKTOP=kde QT_QPA_PLATFORMTHEME=qt6ct GTK_THEME=Breeze:dark blueman-manager",
+        "format-source-muted": " ",
+        "format-icons": {
+            "alsa_output.pci-0000_00_1f.3.analog-stereo": "  ",
+            "alsa_output.pci-0000_00_1f.3.analog-stereo-muted": "  ",
+            "headphone": " ",
+            "hands-free": " ",
+            "headset": " ",
+            "phone": " ",
+            "phone-muted": " ",
+            "portable": " ",
+            "car": " ",
+            "default": [" ", " "]
+        }
+    },
+
+    "custom/power": {
+        "format" : "   ",
+        "tooltip": false,
+        "menu": "on-click",
+        "on-click-right": "swaymsg reload",
+        "menu-file": "~/.config/sway/scripts/power_menu.xml",
+        "menu-actions": {
+            "shutdown": "systemctl poweroff --now || loginctl poweroff",
+            "reboot": "systemctl reboot --now || loginctl reboot",
+            "suspend": "systemctl suspend --now || loginctl suspend",
+            "hibernate": "systemctl hibernate --now || loginctl hibernate"
+        }
+    }
+}
+
+// vim:filetype=json5
+

@@ -1,0 +1,16 @@
+
+Why do we need to write comments?
+    Because in future (if by chance) your code is broken, needs fixing, or requires refactoring.
+    Someone has to touch your code, read it, understand your intent, logic, and syntax
+    and start working on code. Assume there are no comments. No problem - you will still
+    be able to understand it, but it may take longer than it should. It's harder to read
+    and wastes time spent on figuring out how it works. The time worked on code could
+    have been spent on another piece of code; for example fix code or adding a new feature.
+    We may write comments for your future self, but future self doesn't know about current
+    self, so comments are your ways to negotiate or express intent with your future self
+    or others (Write good comments).
+
+How to write comments?
+    Start expressing your code's intent not what it does, think in terms of your intent and
+    behaviour instead of spilling out a another pseudo-code block in comment form.
+

@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+function log() {
+    printf '[%s]: %s\n' "${1}" "${2}"
+}
+
+function get_label() {
+    local partition="${1}"
+    local label_name=""
+    label_name="$(lsblk -o LABEL "${partition}" | grep -v LABEL)"
+    [[ -n "${label_name}" ]] || label_name="${label_name:$((${#label_name} - 4)):${#label_name}}"
+    printf '%s\n' "${label_name}"
+}
+
+function check_mount() {
+    local dir="${1}"
+    if mountpoint -q "${dir}"; then
+        log error "'${dir}' is already mounted, consider unmounting"
+        return 1
+    fi
+}
+
+function mount_fs() {
+    local -a cmd_args=("${@}")
+    # Extract the last element as target
+    local target="${cmd_args[$(( ${#cmd_args[@]} - 1 ))]}"
+    # Pop the last element from cmd_args array
+    cmd_args=("${cmd_args[@]:0:$(( ${#cmd_args[@]} - 1 ))}")
+
+    [[ -n "${target}" ]] || { log error "target is not set"; return 1; }
+
+    [[ ${#cmd_args[@]} -gt 0 ]] || { log error "mount command needs more arguments" ; return 1; }
+
+    if sudo mount --mkdir "${cmd_args[@]}" "${target}"; then
+        log info "mounted '${target}'"
+    else
+        log error "failed to mount '${target}'"
+        return 1
+    fi
+}
+
+function main() {
+    local partition="" mount_dir="" user_id=""
+    local -i shift_val=2
+
+    partition="${1:-""}"
+    [[ -n "${partition}" ]] || { log error "No partition given"; return 1; }
+    mount_dir="${2:-""}"
+    [[ -n "${mount_dir}" ]] || { mount_dir="/mnt/$(get_label "${partition}")" shift_val=$((shift_val - 1)); }
+
+    user_id="$(id -u)"
+
+    shift $shift_val; local -a args=("${@}")
+
+    check_mount "${mount_dir}"
+
+    for arg in "${args[@]}"; do
+        case "${arg}" in
+            *) log error "Invalid arg '${arg}'" ;;
+        esac
+    done
+
+    sudo mkdir -p "${mount_dir}"
+
+    # shellcheck disable=SC2064
+    trap "sudo umount -R \"${mount_dir}\"; exit 0" EXIT SIGINT SIGTERM
+
+    mount_fs "${partition}" "${mount_dir}/" || return 1
+    mount_fs -t proc proc "${mount_dir}/proc" || return 1
+    mount_fs -t sysfs sys "${mount_dir}/sys" || return 1
+    mount_fs -t devtmpfs udev "${mount_dir}/dev" || return 1
+    mount_fs -t devpts pts "${mount_dir}/dev/pts" || return 1
+    mount_fs -t tmpfs shm "${mount_dir}/dev/shm" || return 1
+    mount_fs -t tmpfs tmp "${mount_dir}/tmp" || return 1
+    mount_fs --bind --make-private /run "${mount_dir}/run" || return 1
+    mount_fs --bind --make-private "/run/user/${user_id}" "${mount_dir}/run/user/${user_id}" || return 1
+
+    [[ -d "/dev/dri" ]] && \
+        { mount_fs --bind --make-private /dev/dri "${mount_dir}/dev/dri" || return 1; }
+    [[ -d "/sys/firmware/efi/efivars" ]] && \
+        { mount_fs --bind --make-private /sys/firmware/efi/efivars "${mount_dir}/sys/firmware/efi/efivars" || return 1; }
+
+    log info "Chroot environment set up at '${mount_dir}'"
+    sudo chroot "${mount_dir}" su root -c 'export PS1="(chroot)$PS1"; exec bash'
+}
+
+main "${@}"
+

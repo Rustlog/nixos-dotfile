@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# File to store the timestamp of the last press
+timestamp_file="/tmp/.mod_press_timestamp"
+
+# Get current time in seconds
+current_time=$(date +%s)
+
+# Check if file exists and read the last timestamp
+if [ -f "$timestamp_file" ]; then
+    last_time=$(cat "$timestamp_file")
+    time_diff=$((current_time - last_time))
+
+    # If the difference is less than 500ms (adjust as needed), execute the command
+    if [ "$time_diff" -lt 1 ]; then
+        # Run your desired Waybar command or any other command
+        nwg-drawer -mb 200 -ml 400 -mr 450 -mt 200
+    fi
+fi
+
+# Save current time for the next press
+echo "$current_time" > "$timestamp_file"
+

@@ -1,0 +1,16 @@
+#!/bin/sh
+
+PARTITION="${1:-}"
+TARGET_DIR="${2:-}"
+
+[ -n "${PARTITION}" ] || exit 1
+[ -n "${TARGET_DIR}" ] || exit 1
+
+sudo mount "${PARTITION}" "${TARGET_DIR}/"
+sudo mount -t proc proc "${TARGET_DIR}/proc/"
+sudo mount -t sysfs sys "${TARGET_DIR}/sys/"
+sudo mount -t devtmpfs devtmpfs "${TARGET_DIR}/dev/"
+sudo mount --bind --make-private "/dev/pts/" "${TARGET_DIR}/dev/pts/"
+sudo mount --bind --make-private "/sys/firmware/efi/efivars/" "${TARGET_DIR}/sys/firmware/efi/efivars/"
+sudo cp /etc/resolv.conf "${TARGET_DIR}/etc/resolv.conf"
+

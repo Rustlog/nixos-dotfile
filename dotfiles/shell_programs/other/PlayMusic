@@ -1,0 +1,312 @@
+#!/usr/bin/env bash
+
+# set -euo pipefail
+
+IFS=$' \n'
+
+readonly RED="\033[38;2;244;10;10m" \
+    GREEN="\033[38;2;161;239;116m" \
+    WARN="\033[38;2;233;98;116m" \
+    BROWN="\033[38;2;240;120;120m" \
+    LIGHT_SKIN="\033[38;2;255;230;180m" \
+    MUDDY="\033[38;2;195;158;151m" \
+    GREY="\033[38;2;160;160;140m" \
+    BLUE="\033[38;2;150;134;255m" \
+    NC="\033[0m"
+
+declare -a  MPV_FLAGS=()
+declare -a SELECTED=() CURRENTLY_PLAYING=()
+
+QUIET=0
+DETACH=0
+
+MUSIC_DIR="${MUSIC_DIR:-${HOME}/media/music}"
+
+function LOG() {
+    local type_="${1}"; shift
+    case "${type_}" in
+        info)
+            [[ "${QUIET}" -eq 0 ]] && \
+                { printf "[%b*%b]: " "${GREEN}" "${NC}"; printf "%b" "${*}\n"; }
+            ;;
+        cmd_info)
+            [[ "${QUIET}" -eq 0 ]] && \
+                { printf "[%b%s%b]: " "${GREEN}" "${type_}" "${NC}"; \
+                    for m in "${@}"; do printf '%b ' "${m}"; done; printf '\n'; }
+            ;;
+        warn) printf '[%b%s%b]: %b\n' "${WARN}" "^" "${NC}" "${*}" ;;
+        error) printf '[%b%s%b]: %b\n' "${RED}" "!" "${NC}" "${*}" ;;
+    esac
+}
+
+function Usage() {
+    printf "%b\n" \
+        "" \
+        " ${MUDDY}Usage:${NC} PlayMusic [OPTIONS]" \
+        "" \
+        " ${MUDDY}Options:${NC}" \
+        "   -vid, --video           Enable video output (default: no)" \
+        "   -vol=N, --volume=N      Set volume (default: 65)" \
+        "   -q, --quiet             Suppress MPV output" \
+        "   -s, --shuffle           Shuffle selected tracks (only with --loop)" \
+        "" \
+        " ${MUDDY}Behavior:${NC}" \
+        "   * Uses ${BLUE}fzf${NC} to pick music from '${LIGHT_SKIN}$(ColorPath "${MUSIC_DIR}")${NC}'" \
+        "   * Supports all major audio formats" \
+        "   * Applies optimized mpv flags (hardware decoding, mpris, hdr, etc.)" \
+        "" \
+        " ${MUDDY}Examples:${NC}" \
+        "   PlayMusic                   # Launch, pick music, play (loop-playlist)" \
+        "   PlayMusic --shuffle         # Random shuffle" \
+        "   PlayMusic --vol=45          # Set volume to 45" \
+        "" \
+        " ${BROWN}Note:${NC} Shuffle does nothing without multiple files & --loop." \
+        ""
+}
+
+function ColorPath() {
+    sed "s@${HOME}@${BLUE//\\/\\\\}~${NC//\\/\\\\}@g" <(printf '%s\n' "${1}")
+}
+
+function Exit() {
+    [[ "$1" =~ ^[0-9]+$ || -z "$1" ]] && exit "${1:-0}"
+    printf "%s\n\n" "${1}"
+    exit "${2:-0}"
+}
+
+function CheckDependencies() {
+    local -a deps=(mpv fzf)
+    local -a missing=()
+
+    for cmd in "${deps[@]}"; do
+        if ! command -v "${cmd}" &> /dev/null; then
+            missing+=("${cmd}")
+        fi
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        LOG error "Missing dependencies:"
+        for dep in "${missing[@]}"; do
+            echo -e "  - ${RED}${dep}${NC}"
+        done
+        echo -e "${WARN}Please install the missing dependencies and try again.${NC}"
+        Exit "Exiting..." 1
+    fi
+}
+
+function TurnMusicOn() {
+    local -a files_joined=("$@")
+    local -a quoted_files=()
+    local file=""
+    local track_num=0
+
+    if [[ "$ENABLE_MPV_TUI" -eq 1 ]]; then
+        mpv "${MPV_FLAGS[@]}" "${files_joined[@]/#/${MUSIC_DIR}/}"
+    else
+        LOG info "${BLUE}Tracks${NC}:"
+        for ((i=0;i<${#files_joined[@]};i++)); do
+            track_num=$((i+1))
+            file="${files_joined[$i]}"
+            quoted_files+=( "'${BLUE}$(ColorPath "${MUSIC_DIR}")/${LIGHT_SKIN}${file}${NC}'" )
+            CURRENTLY_PLAYING+=( "${file##"${file%%"${file##*/}"}"}" )
+            LOG info "  ${GREY}$track_num${NC} ${LIGHT_SKIN}${CURRENTLY_PLAYING[$i]%.*}${NC}"
+        done
+        printf '\n'
+        LOG cmd_info "${BROWN}mpv${NC}" "${MPV_FLAGS[@]}" "${quoted_files[@]}"
+        if [[ $DETACH -eq 1 ]]; then
+            mpv "${MPV_FLAGS[@]}" "${files_joined[@]/#/${MUSIC_DIR}/}" & disown
+        else
+            mpv "${MPV_FLAGS[@]}" "${files_joined[@]/#/${MUSIC_DIR}/}"
+        fi
+        printf '\n'
+    fi
+}
+
+function Play() {
+    local -a music_files=()
+    for file in "${SELECTED[@]}"; do
+        if [[ -f "${MUSIC_DIR}/${file}" ]]; then
+            music_files+=("${file}")
+        else
+            LOG error "No such Music file: '${LIGHT_SKIN}${file}${NC}'"
+        fi
+    done
+    TurnMusicOn "${music_files[@]}"
+}
+
+function EqualizerString() {
+    local final_string=""
+
+    # --af=equalizer=f=[freq]:t=[type]:w=[width[:g=[gain]
+    #   f = frequency
+    #   t = filter type
+    #   w = bandwidth (higher values = wider range)
+    #   g = gain (positive = boost, negative = cut)
+
+    local -a audio_filter=(
+        # Sub-bass (20–60 Hz): Low-end punch and rumble
+        "equalizer=f=20:w=2:g=10"         # 20 Hz, wider range, mild boost for deep rumble
+        "equalizer=f=30:w=2:g=8"          # 30 Hz, slightly less aggressive, still wide
+        "equalizer=f=40:w=2:g=6"          # 40 Hz, moderate boost, still adds fullness
+        "equalizer=f=50:w=2:g=5"          # 50 Hz, good for warmth
+        "equalizer=f=60:w=2:g=4"          # 60 Hz, maintains depth but not overwhelming
+
+        # Bass (80–150 Hz): Punch and body without overwhelming the mids
+        "equalizer=f=80:w=1.5:g=4"        # 80 Hz, boosts bass punch
+        "equalizer=f=100:w=1.5:g=3"       # 100 Hz, gives warmth without muddiness
+        "equalizer=f=120:w=1.5:g=2"       # 120 Hz, subtle boost, ensures balance
+
+        # Lower Mids (200–500 Hz): Adds fullness, can get muddy if overdone
+        "equalizer=f=200:w=1.2:g=-2"      # 200 Hz, slight cut to reduce mud
+        "equalizer=f=250:w=1.2:g=1"       # 250 Hz, small boost to maintain warmth
+        "equalizer=f=300:w=1.2:g=2"       # 300 Hz, slight boost for fullness
+        "equalizer=f=400:w=1.2:g=1"       # 400 Hz, maintaining body without muddiness
+
+        # Mids (500 Hz–2 kHz): Clarity and presence for vocals and instruments
+        "equalizer=f=500:w=1.0:g=-1"      # 500 Hz, cut slightly to prevent boxiness
+        "equalizer=f=700:w=1.0:g=1"       # 700 Hz, slight boost for clarity
+        "equalizer=f=1000:w=1.0:g=2"      # 1 kHz, gives presence to vocals
+        "equalizer=f=1500:w=1.0:g=2"      # 1.5 kHz, boosts instrument clarity
+        "equalizer=f=2000:w=1.0:g=3"      # 2 kHz, crucial for vocal clarity
+
+        # Upper Mids & Presence (2–4 kHz): Adds sharpness and detail to vocals and instruments
+        "equalizer=f=3000:w=1.0:g=3"      # 3 kHz, crispness and clarity to vocals
+        "equalizer=f=4000:w=1.0:g=2"      # 4 kHz, vocal presence, subtle sharpness
+
+        # Treble (5–10 kHz): Adds air, brightness, and sparkle to the mix
+        "equalizer=f=5000:w=1.5:g=2"      # 5 kHz, subtle sparkle and definition
+        "equalizer=f=8000:w=1.5:g=1"      # 8 kHz, increases clarity in cymbals and high instruments
+        "equalizer=f=10000:w=1.5:g=1"     # 10 kHz, adds air and high-end presence
+
+        # Ultra-Treble (12–20 kHz): Airiness and "sheen"
+        "equalizer=f=12000:w=2:g=1"       # 12 kHz, adds subtle airiness
+        "equalizer=f=16000:w=2:g=1"       # 16 kHz, even more air and sparkle
+        "equalizer=f=20000:w=2:g=0.5"     # 20 kHz, high-end sparkle, mild boost
+    )
+
+    # Loop through and assemble the filter chain
+    for ((i=0;i<${#audio_filter[@]};i++)); do
+        str="${audio_filter[i]}"
+        final_string+="${str}"
+        # Add a comma if it's not the last entry
+        [[ ${i} -lt $(( ${#audio_filter[@]} - 1 )) ]] && final_string+=","
+        done
+
+        # Output the final string
+        printf '%s\n' "${final_string}"
+}
+
+function main() {
+    local -a ARG_ARR=("$@")
+    local volume="" video=""
+    local -i shuffle=0 play_all=0 enable_eq=0
+    local -g loop=0 ENABLE_MPV_TUI=0
+
+    CheckDependencies
+
+    local arg=""
+    for (( i=0 ; i < ${#ARG_ARR[@]} ; i++ )); do
+        arg="${ARG_ARR[$i]}"
+        case "${arg}" in
+            vol|--vol--volume|volume)
+                volume=${ARG_ARR[ $((i+1)) ]}
+                [[ -z ${volume} || ${volume} == -* ]] && {
+                    LOG error "No argument give after ${GREY}--volume${NC}"
+                    LOG info "Default volume: ${BLUE}65${NC}"
+                    volume=65
+                }
+                i=$((i+1))
+                ;;
+            vol=*|--vol=*|--volume=*|volume=*)
+                if [[ "${arg#*=}" =~ ^[0-9]+$ ]]; then
+                    volume=$(awk -F'=' '{print $2}' <<< "${arg}")
+                else
+                    LOG error "Invalid volume: ${arg}"
+                    LOG info "Default volume: ${BLUE}65${NC}"
+                fi
+                ;;
+            vid|--vid|--video|video) video="auto" ;;
+            -q|--quiet) QUIET=1 ;;
+            -t|-*tui|tui) ENABLE_MPV_TUI=1 ;;
+            -a|-*play*all|play*all|all) play_all=1 ;;
+            -s|--shuff|shuff|--shuffle|shuffle) shuffle=1 ;;
+            -e|--eq|-eq|eq) enable_eq=1 ;;
+            -d|--disown|--detach)  DETACH=1 ;;
+            -h|--help|help) Usage; Exit 0 ;;
+            *)
+                if [[ -d "${arg}" ]];then
+                    MUSIC_DIR="${arg}"
+                else
+                    Usage; Exit 0
+                fi
+                ;;
+        esac
+    done
+
+    trap 'Exit 0' SIGINT SIGQUIT
+    trap 'Exit 1' SIGTERM
+
+    [[ -d "${MUSIC_DIR}" ]] || {
+        LOG error "Music directory not found: '${BLUE}${MUSIC_DIR}${NC}'"
+        Exit 1
+    }
+
+    if [[ "$play_all" -eq 1 ]]; then
+        mapfile -t SELECTED < <(find "${MUSIC_DIR}" -mindepth 1 -type f -printf "%P\n")
+    else
+        mapfile -t SELECTED < <(find "${MUSIC_DIR}" -mindepth 1 -type f -printf "%P\n" | fzf --multi)
+    fi
+
+    if [[ "${#SELECTED[@]}" -eq 0 ]]; then
+        LOG info "No song selected"
+        Exit 1
+    elif [[ "${#SELECTED[@]}" -gt 1 ]]; then
+        loop=1
+    fi
+
+    [[ "$shuffle" -eq 1 && "$loop" -eq 0 ]] && LOG warn "Shuffle can only be used with mutiple tracks"
+    [[ "$shuffle" -eq 1 ]] && mapfile -t SELECTED <(shuf <<< "${SELECTED[@]}")
+
+    MPV_FLAGS+=(
+        "--vid=${video:-"no"}"
+        "--volume=${volume:-64}"
+    )
+
+    MPV_FLAGS+=(
+        "--osc=no"
+        "--script-opts=mpris=yes"
+    )
+
+    if  [[ "$ENABLE_MPV_TUI" -eq 1 ]]; then
+        MPV_FLAGS+=(
+            "--vo=tct"
+            "--vo-tct-algo=half-blocks"
+            "--vid=auto"
+            "--really-quiet"
+        )
+    else
+        MPV_FLAGS+=( "--vo=gpu-next")
+    fi
+
+    MPV_FLAGS+=(
+        # "--hwdec=vulkan"
+        # "--gpu-api=vulkan"
+        "--hdr-compute-peak"
+        "--loop-playlist=inf"
+        "--msg-level=all=error"
+    )
+    [[ "$enable_eq" -eq 1 ]] && MPV_FLAGS+=(
+        "--af=$(EqualizerString)"
+    )
+    MPV_FLAGS+=(
+        "--pulse-buffer=2000"
+        "--pipewire-buffer=2000"
+        "--really-quiet"
+    )
+    [[ "${QUIET}" -eq 1 ]] && MPV_FLAGS+=("--really-quiet")
+
+    Play
+}
+
+main "$@"
+

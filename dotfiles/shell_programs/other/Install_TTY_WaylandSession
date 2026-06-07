@@ -1,0 +1,360 @@
+#!/usr/bin/bash
+
+set -o pipefail
+
+function log() {
+    local type_="${1}"; shift 1
+    printf '[%s]: %s\n' "${type_}" "${*}"
+}
+
+function Usage() {
+    cat << EOF
+
+    Usage: ${0##*/} [sway|hyprland]
+
+    Desc:
+        Configure dbus session and starts pipewire
+        Run script from tty (/usr/local/bin/[LaunchSway|LaunchHyprland])
+
+EOF
+}
+
+function InstallSwayLauncher() {
+    local script_path="${1}"
+    local desktop_session_file_path="${2}"
+    sudo mkdir -p "${script_path%/*}"
+
+# Install Script
+    if sudo tee "${script_path}" &>/dev/null << EOF
+#!/usr/bin/env sh
+
+cd ~ || exit 1
+
+kill_processes() {
+    pkill -u "\$(id -u)" -f \\
+        'easyeffects|pipewire|wireplumber|pipewire-pulse|cava -p|socat -u UNIX' \\
+            2> /dev/null
+}
+
+kill_processes
+
+HOME="\${HOME:-\$(printf ~)}"
+XDG_SESSION_TYPE=wayland
+XDG_CURRENT_DESKTOP=sway
+XDG_SESSION_DESKTOP=sway
+XDG_DATA_HOME=\$HOME/.local/share
+XDG_CONFIG_HOME=\$HOME/.config
+XDG_RUNTIME_DIR=/run/user/"\$(id -u)"
+PIPEWIRE_RUNTIME_DIR=/run/user/"\$(id -u)"
+QT_QPA_PLATFORMTHEME=qt6ct
+WLR_RENDERER=vulkan
+
+DBUS_SOCKET_ADDR="\${XDG_RUNTIME_DIR}/dbus-sway"
+
+pkill -u "\$(id -u)" -f \\
+    "dbus-daemon --session .* --address=unix:path=\${DBUS_SOCKET_ADDR}" &
+wait \$!
+
+stat -c '%F' "\${DBUS_SOCKET_ADDR}" 1> /dev/null 2>&1 | \\
+    grep socket 1> /dev/null 2>&1 || \\
+        DBUS_SOCKET="\$( \\
+            dbus-daemon --session --fork \\
+                --nopidfile --print-address=1 \\
+                --address=unix:path="\${DBUS_SOCKET_ADDR}" \\
+        )"
+
+DBUS_SESSION_BUS_ADDRESS="\${DBUS_SOCKET}"
+
+set -- "--config" "\${HOME}/.config/sway/config"
+
+lsmod | grep nvidia 1> /dev/null 2>&1 && set -- "\${@}" "--unsupported-gpu"
+
+if [ -r ~/.config/card ]; then
+    WLR_DRM_DEVICES="\$HOME/.config/card"
+    export WLR_DRM_DEVICES
+fi
+
+VK_ICD_FILENAMES=\$(printf /usr/share/vulkan/icd.d/*radeon*x86_64.json 2>/dev/null) && \\
+    export VK_ICD_FILENAMES
+
+export XDG_SESSION_DESKTOP XDG_RUNTIME_DIR XDG_SESSION_TYPE \\
+    XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS \\
+    PIPEWIRE_RUNTIME_DIR QT_QPA_PLATFORMTHEME WLR_RENDERER \\
+    XDG_CONFIG_HOME XDG_DATA_HOME
+
+pipewire 1> /dev/null 2>&1 &
+
+exec sway "\${@}"
+
+EOF
+    then
+        sudo chown root:root "${script_path}" && \
+            sudo chmod 755 "${script_path}"
+        log info "Installed script: '${script_path}'"
+    fi
+
+# Install Desktop session file
+    if sudo tee "${desktop_session_file_path}" &>/dev/null << EOF
+[Desktop Entry]
+Name=Sway (Wayland) - [custom]
+Comment=An i3 like Wayland compositor
+Exec=${script_path}
+Type=Application
+
+EOF
+    then
+        log info "Installed desktop session file '${desktop_session_file_path}'"
+        sudo chown root:root "${desktop_session_file_path}" && \
+            sudo chmod 644 "${desktop_session_file_path}"
+    fi
+}
+
+function InstallSwaySystemdLauncher() {
+    local script_path="${1}"
+    local desktop_session_file_path="${2}"
+    sudo mkdir -p "${script_path%/*}"
+
+# Install Script
+    if sudo tee "${script_path}" &>/dev/null << EOF
+#!/usr/bin/env sh
+
+cd ~ || exit 1
+
+kill_processes() {
+    pkill -u "\$(id -u)" -f \\
+        'easyeffects|wireplumber|cava -p|socat -u UNIX' \\
+            2> /dev/null
+}
+
+kill_processes
+
+HOME="\${HOME:-\$(printf ~)}"
+XDG_SESSION_TYPE=wayland
+XDG_CURRENT_DESKTOP=sway
+XDG_SESSION_DESKTOP=sway
+XDG_DATA_HOME=\$HOME/.local/share
+XDG_CONFIG_HOME=\$HOME/.config
+XDG_RUNTIME_DIR=/run/user/"\$(id -u)"
+PIPEWIRE_RUNTIME_DIR=/run/user/"\$(id -u)"
+QT_QPA_PLATFORMTHEME=qt6ct
+WLR_RENDERER=vulkan
+
+set -- "--config" "\${HOME}/.config/sway/config"
+
+lsmod | grep nvidia 1> /dev/null 2>&1 && set -- "\${@}" "--unsupported-gpu"
+
+if [ -r ~/.config/card ]; then
+    WLR_DRM_DEVICES="\$HOME/.config/card"
+    export WLR_DRM_DEVICES
+fi
+
+export XDG_SESSION_DESKTOP XDG_RUNTIME_DIR XDG_SESSION_TYPE \\
+    XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS \\
+    PIPEWIRE_RUNTIME_DIR QT_QPA_PLATFORMTHEME WLR_RENDERER \\
+    XDG_CONFIG_HOME XDG_DATA_HOME
+
+exec sway "\${@}"
+
+EOF
+    then
+        sudo chown root:root "${script_path}" && \
+            sudo chmod 755 "${script_path}"
+        log info "Installed script: '${script_path}'"
+    fi
+
+# Install Desktop session file
+    if sudo tee "${desktop_session_file_path}" &>/dev/null << EOF
+[Desktop Entry]
+Name=Sway (Wayland) - [custom]
+Comment=An i3 like Wayland compositor
+Exec=${script_path}
+Type=Application
+
+EOF
+    then
+        log info "Installed desktop session file '${desktop_session_file_path}'"
+        sudo chown root:root "${desktop_session_file_path}" && \
+            sudo chmod 644 "${desktop_session_file_path}"
+    fi
+}
+
+function InstallQtileLauncher() {
+    local script_path="${1}"
+    local desktop_session_file_path="${2}"
+    sudo mkdir -p "${script_path%/*}"
+
+# Install Script
+    if sudo tee "${script_path}" &>/dev/null << EOF
+#!/usr/bin/env sh
+
+cd ~ || exit 1
+
+kill_processes() {
+    pkill -u "\$(id -u)" -f \\
+        'pipewire|wireplumber|pipewire-pulse|cava -p|socat -u UNIX' \\
+            2> /dev/null
+}
+
+kill_processes
+
+HOME="\${HOME:-\$(printf ~)}"
+XDG_SESSION_TYPE=wayland
+XDG_CURRENT_DESKTOP=Qtile
+XDG_SESSION_DESKTOP=Qtile
+XDG_DATA_HOME=\$HOME/.local/share
+XDG_CONFIG_HOME=\$HOME/.config
+XDG_RUNTIME_DIR=/run/user/"\$(id -u)"
+PIPEWIRE_RUNTIME_DIR=/run/user/"\$(id -u)"
+QT_QPA_PLATFORMTHEME=qt6ct
+WLR_RENDERER=vulkan
+
+DBUS_SOCKET_ADDR="\${XDG_RUNTIME_DIR}/dbus-sway"
+
+pkill -u "\$(id -u)" -f \\
+    "dbus-daemon --session .* --address=unix:path=\${DBUS_SOCKET_ADDR}" &
+wait \$!
+
+stat -c '%F' "\${DBUS_SOCKET_ADDR}" 1> /dev/null 2>&1 | \\
+    grep socket 1> /dev/null 2>&1 || \\
+        DBUS_SOCKET="\$( \\
+            dbus-daemon --session --fork \\
+                --nopidfile --print-address=1 \\
+                --address=unix:path="\${DBUS_SOCKET_ADDR}" \\
+        )"
+
+DBUS_SESSION_BUS_ADDRESS="\${DBUS_SOCKET}"
+
+export XDG_SESSION_DESKTOP XDG_RUNTIME_DIR XDG_SESSION_TYPE \\
+    XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS \\
+    PIPEWIRE_RUNTIME_DIR QT_QPA_PLATFORMTHEME WLR_RENDERER \\
+    XDG_CONFIG_HOME XDG_DATA_HOME
+
+pipewire 1> /dev/null 2>&1 &
+
+exec qtile start --backend wayland --config ~/.config/qtile/config.py
+
+EOF
+    then
+        sudo chown root:root "${script_path}" && \
+            sudo chmod 755 "${script_path}"
+        log info "Installed script: '${script_path}'"
+    fi
+
+# Install Desktop session file
+    if sudo tee "${desktop_session_file_path}" &>/dev/null << EOF
+[Desktop Entry]
+Name=Qtile (Wayland) - [custom]
+Comment=Qtile Wayland compositor
+Exec=${script_path}
+Type=Application
+
+EOF
+    then
+        log info "Installed desktop session file '${desktop_session_file_path}'"
+        sudo chown root:root "${desktop_session_file_path}" && \
+            sudo chmod 644 "${desktop_session_file_path}"
+    fi
+}
+
+function InstallHyprlandLauncher() {
+    local script_path="${1}"
+    local desktop_session_file_path="${2}"
+    sudo mkdir -p "${script_path%/*}"
+
+# Install script
+    if sudo tee "${script_path}" &>/dev/null << EOF
+#!/usr/bin/env sh
+
+cd ~ || exit 1
+
+kill_processes() {
+    pkill -u "\$(id -u)" -f \\
+        'pipewire|wireplumber|pipewire-pulse|cava -p|socat -u UNIX' \\
+            2> /dev/null
+}
+
+kill_processes
+
+XDG_SESSION_TYPE=wayland
+XDG_CONFIG_HOME=\$HOME/.config
+XDG_DATA_HOME=\$HOME/.local/share
+XDG_RUNTIME_DIR=/run/user/"\$(id -u)"
+PIPEWIRE_RUNTIME_DIR=/run/user/"\$(id -u)"
+QT_QPA_PLATFORMTHEME=qt6ct
+WLR_RENDERER=vulkan
+
+DBUS_SOCKET_ADDR="\${XDG_RUNTIME_DIR}/dbus-Hyprland"
+
+pkill -u "\$(id -u)" -f \\
+    "dbus-daemon --session .* --address=unix:path=\${DBUS_SOCKET_ADDR}" &
+wait \$!
+
+stat -c '%F' "\${DBUS_SOCKET_ADDR}" 1> /dev/null 2>&1 | \\
+    grep socket 1> /dev/null 2>&1 || \\
+        DBUS_SOCKET="\$( \\
+            dbus-daemon --session --fork \\
+                --nopidfile --print-address=1 \\
+                --address=unix:path="\${DBUS_SOCKET_ADDR}" \\
+        )"
+
+DBUS_SESSION_BUS_ADDRESS="\${DBUS_SOCKET}"
+
+set -- "--config" "\${HOME}/.config/hypr/hyprland.conf"
+
+export XDG_SESSION_TYPE XDG_RUNTIME_DIR \\
+    PIPEWIRE_RUNTIME_DIR QT_QPA_PLATFORMTHEME \\
+    WLR_RENDERER DBUS_SESSION_BUS_ADDRESS \\
+    XDG_CONFIG_HOME XDG_DATA_HOME
+
+pipewire 1> /dev/null 2>&1 &
+
+exec Hyprland "\${@}"
+
+EOF
+    then
+        sudo chown root:root "${script_path}" && \
+            sudo chmod 755 "${script_path}"
+        log info "Installed script: '${script_path}'"
+    fi
+
+# Install Desktop session file
+    if sudo tee "${desktop_session_file_path}" &>/dev/null << EOF
+[Desktop Entry]
+Name=Hyprland (Wayland) - [custom]
+Comment=Hyprland - dynamic tiling window manager
+Exec=${script_path}
+Type=Application
+
+EOF
+    then
+        sudo chown root:root "${desktop_session_file_path}" && \
+            sudo chmod 644 "${desktop_session_file_path}"
+        log info "Installed desktop session file '${desktop_session_file_path}'"
+    fi
+}
+
+function main() {
+    local args=("${@}")
+
+    for arg in "${args[@]}"; do
+        case "${arg}" in
+            sway) InstallSwayLauncher \
+                    "/usr/local/bin/LaunchSway" \
+                    "/usr/share/wayland-sessions/custom_sway.desktop" ;;
+            sway[-_]system*) InstallSwaySystemdLauncher \
+                    "/usr/local/bin/LaunchSystemdSway" \
+                    "/usr/share/wayland-sessions/custom_sway_systemd.desktop" ;;
+            hyprland) InstallHyprlandLauncher \
+                    "/usr/local/bin/LaunchHyprland" \
+                    "/usr/share/wayland-sessions/custom_hyprland.desktop" ;;
+            qtile|Qtile) InstallQtileLauncher \
+                    "/usr/local/bin/LaunchQtile" \
+                    "/usr/share/wayland-sessions/custom_qtile.desktop" ;;
+            -h|--help) Usage ;;
+            *) log error "Invalid flag '${arg}'"; return 1 ;;
+        esac
+    done
+}
+
+main "${@}"
+

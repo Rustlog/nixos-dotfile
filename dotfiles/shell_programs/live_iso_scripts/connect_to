@@ -1,0 +1,17 @@
+#!/bin/sh
+
+SSID="${1:-}"
+PASSWORD="${2:-}"
+
+[ -n "${SSID}" ] || exit 1
+[ -n "${PASSWORD}" ] || exit 1
+
+NETWORK_ID="$(sudo wpa_cli add_network | tail -n1)" || exit 1
+sleep 0.1 && sudo wpa_cli set_network "$NETWORK_ID" ssid \"${SSID}\"
+sudo wpa_cli set_network "$NETWORK_ID" psk \"${PASSWORD}\"
+sudo wpa_cli set_network "$NETWORK_ID" scan_ssid 1
+sudo wpa_cli enable_network "$NETWORK_ID"
+sudo wpa_cli select_network "$NETWORK_ID"
+
+(sleep 4 && sudo wpa_cli status) &
+

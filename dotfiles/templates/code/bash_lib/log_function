@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+
+builtin set -euo pipefail
+
+NO_COLOR=0
+LOGLEVEL="${LOGLEVEL:-0}"
+
+function log() {
+    local _type="${1:-}"; shift
+    local _color="" _t="" severity=""
+    local -i default_level=4
+
+    local -A level=(
+        [error]=1
+        [fatal]=1
+        [warn]=1
+        [info]=2
+        [debug]=3
+        [other]=4
+    )
+
+    local -g _info_color="" _warn_color="" _error_color=""
+        _fatal_color="" _other_color="" _nc=""
+    _info_color="" _warn_color="" _error_color="" _fatal_color="" _other_color="" _nc=""
+    is_flag_disabled "$NO_COLOR" && _info_color="\033[38;2;85;255;126m" \
+        _warn_color="\033[38;2;255;170;10m" _error_color="\033[38;2;244;29;31m" \
+        _fatal_color="\033[5m\033[38;2;255;0;0m" _other_color="\033[38;2;251;255;208m" _nc="\033[0m"
+    case "${_type}" in
+        info) _color="${_info_color:-}" _t="*"    ;;
+        warn) _color="${_warn_color:-}" _t="^"    ;;
+        error) _color="${_error_color:-}" _t="!"  ;;
+        fatal) _color="${_fatal_color:-}" _t="#"  ;;
+        *) _color="${_other_color-""}" _t=""      ;;
+    esac
+
+    severity="${level[${_type}]:-${default_level}}"
+
+    (( LOGLEVEL >= severity )) || return 0
+
+    printf "[%b%s%b%s]: %s: %b\n" \
+        "${_color}" "${_type}" "${_nc}" "${_t}" "${FUNCNAME[1]}()" "${*//$HOME/\~}"
+    return 0
+}
+
+function main() {
+    log fatal "fatal"
+    log error "error"
+    log warn "warning"
+    log info "info"
+    log debug "debug"
+    log other "other"
+    log trace "trace"
+}
+
+main "${@}"
+

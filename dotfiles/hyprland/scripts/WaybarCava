@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+
+builtin set -euo pipefail
+
+LOGGING=0
+
+# logger
+function log() {
+    local type_="${1}"; shift
+    [[ $LOGGING -eq 1 ]] && printf '[%s]: %s\n' "${type_}" "${*}" 1>&2
+    printf '[%s]: %b\n' "${type_}" "${*}" &>> "${work_dir}/waybar_.log"
+}
+
+function KILL_childs_processes() {
+    { pgrep -f ".*${0}" | grep -v "^$$" | xargs -r kill -SIGINT; } 2>/dev/null || true
+    { pkill -f "cava -p ${work_dir}/cava_visualizer_X_.*.fifo.*"; } 2>/dev/null || true
+}
+
+# write a fresh configuration for cava
+function BuildConfig() {
+    local config_file="${1}"
+    local pipe="${2}"
+    local bar_="${3}"
+    local cava_bar="${4}"
+    local -i noise_level=${5}
+    local -i framerate=${6}
+
+if ! cat 1> "${config_file}" << EOF
+
+# Config: '${config_file}'
+# Automatically generate config by process '${0}'
+
+[general]
+bars = ${#cava_bar}
+framerate = $framerate
+
+[input]
+method = pulse
+source = auto
+
+[output]
+method = raw
+raw_target = ${pipe}
+data_format = ascii
+ascii_max_range = $((${#bar} - 1))
+
+[smoothing]
+noise_reduction = $noise_level
+
+EOF
+    then
+        log error "Failed to write cava config '${config_file}'"
+fi
+}
+
+# printfs the usage of this script
+function Usage() {
+    cat << EOF
+
+    Usage: ${0##*/} [STYLE] [FRAMERATE] [BAR_LEN]
+        Where STYLE is waybar style
+        Where FRAMERATE is framerate of cava bar
+        Where BAR_LEN is length of cava bar
+        Use 0 for defaults
+
+EOF
+}
+
+# clean when exiting
+function CleanUP() {
+    local pipe="${1:-""}"
+    local config="${2:-""}"
+    local -n ref_pids=${3}
+
+    [[ -p "${pipe}" ]] && { rm -f "${pipe}" || log error "Failed to clean pipe '${pipe}'"; }
+    [[ -f "${config}" ]] && { rm -f "${config}" || log error "Failed to clean config '${config}'"; }
+
+    for pid in "${ref_pids[@]}"; do
+        if ps -p "${pid}" &> /dev/null; then
+            kill -SIGINT "${pid}" || log error "Failed to kill '${pid}'";
+        fi
+    done
+    pkill -f "cava -p ${config}" || true
+}
+
+# bar characters (represents visualizer levels)
+function SetBar() {
+    local -n bar_ref=${1}
+    local -n cava_bar_ref=${2}
+    local -n noise_level_ref=${3}
+    local -n dict_ref=${4}
+    local -i use_bar_num=${5:-1}
+    local -i bar_len=${6:-4}
+
+    case ${use_bar_num} in
+        1) bar_ref="▁▂▃▄▅▆▇█"; noise_level_ref=40 ;;
+        2) bar_ref="░░▒▒▓▓██"; noise_level_ref=88 ;;
+        3) bar_ref="⣀⣄⣆⣇⣧⣷⣿"; noise_level_ref=70 ;;
+        4) bar_ref="┳┻┳┻┳┻┳┻"; noise_level_ref=50 ;;
+    esac
+
+    # create an idle bar `________` when nothing is playing
+    cava_bar_ref=""
+    for i in $(seq 1 $((bar_len*2))); do
+        cava_bar_ref+="${bar_ref:0:1}"
+    done
+
+    # create dictionary to with key (numbers) value (corresponding glyph character) pair for `sed`
+    dict_ref="s@;@@g"
+    for ((i=0;i<${#bar_ref};i++)); do
+        dict_ref+=";s@$i@${bar_ref:$i:1}@g"
+    done
+}
+
+# restart cava with next bar when script recieves SIGUSR1 signal
+function ToggleBar() {
+    local -n bar_ref_=${1}
+    local -n cava_bar_ref_=${2}
+    local -n noise_level_ref_=${3}
+    local -n dict_ref_=${4}
+    local -n use_bar_num_ref=${5}
+    local -n config_file_ref=${6}
+    local -n pipe_ref=${7}
+    local -n bar_len_ref=${8}
+    local -n framerate_ref=${9}
+
+    use_bar_num_ref=$(( (use_bar_num_ref % 4) + 1 ))
+
+    ## set the bars
+    SetBar bar cava_bar noise_level dict $use_bar_num $bar_len_ref
+
+    ## create fresh new the config
+    BuildConfig "${config_file_ref}" "${pipe_ref}" "${bar}" "${cava_bar}" $noise_level $framerate_ref
+
+    ## re-start cava
+    pkill -f "cava -p ${config_file_ref}" || { log error "Failed to kill cava"; return 1; }
+    cava -p "${config_file_ref}" &
+    ## we don't need configuration now
+    (sleep 0.4 && rm -f "${config_file_ref}")
+}
+
+function main() {
+    local -a args=("${@}")
+    # global vars
+    local -g work_dir="/tmp/waybar/${0##*/}"
+    local tmp
+    # a temporary file for uniqueness
+    tmp="${work_dir}/cava_visualizer_X_$(hexdump -n2 -ve '/1 "%02x"' /dev/urandom).fifo"
+    # create cava config
+    local config_file="${tmp}_config"
+    # output Pipe
+    local pipe="${tmp}"
+    # ASCII characters
+    local cava_bar=""
+    # glyph characters
+    local dict="s@;@@g"
+    # actual bar glyph characters
+    local bar=""
+    # noise reduction
+    local -i noise_level=0
+    # framerate of cava bar
+    local -i framerate=36
+    # change the length of cava visualizer
+    local -i bar_len=4
+    # bar style (1rd is default)
+    local -i use_bar_num=1
+
+    local -a pids=()
+
+    for ((i=0;i<${#args[@]};i++)); do
+        arg="${args[$i]}"
+        [[ $i -eq 0 && "${arg}" =~ ^[0-9]$ ]] && { [[ "${arg}" -ne 0 ]] && use_bar_num=${arg}; continue; }
+        [[ $i -eq 1 && "${arg}" =~ ^[0-9]+$ ]] && { [[ "${arg}" -ne 0 ]] && framerate=${arg}; continue; }
+        [[ $i -eq 2 && "${arg}" =~ ^[0-9]+$ ]] && { [[ "${arg}" -ne 0 ]] && bar_len=${arg}; continue; }
+        case "${arg}" in
+            -h|--help|help) Usage; return 0 ;;
+            -*log*|log*) LOGGING=1 log info "logging enabled" ;;
+            *) log error "invalid argument '${arg}'" ;;
+        esac
+    done
+
+    mkdir -p "${work_dir}"
+
+    KILL_childs_processes
+
+    ## set the bars
+    SetBar bar cava_bar noise_level dict $use_bar_num $bar_len
+
+    ## create the config
+    BuildConfig "${config_file}" "${pipe}" "${bar}" "${cava_bar}" $noise_level $framerate
+
+    log info "bar num: ${use_bar_num}"
+    log info "framerate: ${framerate}"
+    log info "work dir: ${work_dir}"
+    log info "log file: ${work_dir}/waybar_.log"
+    log info "config file: ${config_file}"
+    log info "pipe: ${pipe}"
+    log info "noise level: ${noise_level}"
+    log info "bar len: ${bar_len}"
+    log info "\n\n"
+
+    ## start cava in background
+    mkfifo "${pipe}" || { log error "Failed to create fifo device: '${pipe}'"; return 1; }
+    cava -p "${config_file}" &
+    pids+=($!)
+
+    ## we don't need configuration now
+    (sleep 0.4 && rm -f "${config_file}")
+
+    # when your are done just clean the mess
+    trap "CleanUP ${pipe} ${config_file} pids; exit" EXIT SIGINT SIGTERM
+    # trap SIGUSR1 to toggle next bar
+    trap 'ToggleBar bar cava_bar noise_level dict use_bar_num config_file pipe bar_len framerate' SIGUSR1
+
+    ## read stdout from cava, transform output, and check for activity
+    local visualizer_output=""
+    while read -r line < "${pipe}" || true; do
+        visualizer_output=$(printf '%s\n' "${line}" | sed -u "${dict}")
+        # detect if there's any visualizer activity (i.e., non-empty output)
+        if [[ -n "${visualizer_output}" && "${visualizer_output}" != "${cava_bar}" ]]; then
+            # JSON output with a class to enable dynamic output
+            printf '%s\n' "{\"text\": \"${visualizer_output}\", \"class\": \"active\"}"
+        else
+            # JSON output with a class indicating idle state
+            printf '%s\n' "{\"text\": \"${visualizer_output}\", \"class\": \"inactive\"}"
+        fi
+    done
+}
+
+main "${@}"
+

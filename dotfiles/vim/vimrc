@@ -1,0 +1,166 @@
+" Plugin Manager (vim-plug)
+
+source /usr/share/vim/VIM/plug.vim
+
+call plug#begin('/usr/share/vim/VIM')
+    " Comment stuff
+    Plug 'tpope/vim-commentary'
+    " Autocompletion
+    Plug 'neoclide/coc.nvim', {'branch': 'release'}
+    " Nerdtree file finder
+    Plug 'preservim/nerdtree'
+    " Bottom bar
+    Plug 'vim-airline/vim-airline'
+    " Molokai Theme
+    Plug 'tomasr/molokai'
+call plug#end()
+
+" Color scheme
+colorscheme sorbet
+
+" Enable syntax highlighting
+syntax enable
+
+" Line numbers relative to current cursor position
+set relativenumber
+" numbers on left side
+set number
+
+" Tab and indentation settings
+set shiftwidth=4
+set expandtab
+set tabstop=4
+
+" Enable 24-bit color support
+set termguicolors
+
+" Disable 24-bit color support
+" set notermguicolors
+
+" Set mouse to insert
+set mouse=i
+
+" Enable cursorline for focus
+set cursorline
+
+" Enable filetype-specific plugins and indentations
+filetype plugin indent on
+
+" Custom keybindings
+nnoremap <silent><A-j> :move .+1 <CR>==
+vnoremap <silent><A-j> :move '>+1 <CR>gv=gv
+inoremap <silent><A-j> <ESC>:move .+1 <CR>==gi
+
+nnoremap <silent><A-k> :move .-2 <CR>==
+vnoremap <silent><A-k> :move '<-2 <CR>gv=gv
+inoremap <silent><A-k> <ESC>:move .-2 <CR>==gi
+
+" Create new line below (Shift + Enter)
+nnoremap <silent><S-CR> :normal! o <CR>
+
+" Toggle NerdTree with Ctrl + Space
+nnoremap <silent><C-Space> :NERDTreeToggle<CR>
+
+" Install vim-plug (plugin manager)
+function! InstallPlug()
+    call system("curl -fsSLo /usr/share/vim/VIM/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim")
+    source /usr/share/vim/VIM/plug.vim
+    execute 'PlugUpdate'
+endfunction
+command! InstallPlug call InstallPlug()
+
+" Uninstall/Remove Plug
+function! RemovePlug()
+    execute '!rm -r /usr/share/vim/VIM'
+endfunction
+command! RemovePlug :call RemovePlug
+
+" Automatically jump to last cursor position when reopening a file
+autocmd BufReadPost * if line("'\"") > 0 && line("'\"") <= line("$") |
+    \ exe "normal! g`\" | zz" | endif
+
+" Run C++
+command! RunCpp w | execute
+    \ '!gcc -x c++ -pedantic -std=c++20 -lstdc++ -fno-elide-constructors -Wall -Wextra -O0 ' .
+    \ shellescape(expand('%:p')) . ' -o ' . shellescape(expand('%:p:r')) . ' && ' .
+    \ shellescape(expand('%:p:r')) . ' ; rm ' . shellescape(expand('%:p:r'))
+" Run C
+command! RunC w | execute
+    \ '!gcc -pedantic -Wall -Wextra -O0 ' . shellescape(expand('%:p')) . ' -o ' .
+    \ shellescape(expand('%:p:r')) . ' && ' . shellescape(expand('%:p:r')) . ' ; rm ' .
+    \ shellescape(expand('%:p:r'))
+
+" Function to toggle 'wrap' setting
+function! ToggleWrap()
+    if &wrap
+        set nowrap
+    else
+        set wrap
+    endif
+endfunction
+
+" Wrap/unwrap toggle with F2
+nnoremap <silent><F2> :call ToggleWrap() <CR>
+command! ToggleWrap :call ToggleWrap()
+
+" auto chmod logic
+autocmd BufWritePost *.sh,*.py if getline(1) =~ '^#!' | silent !chmod +x '%' | endif
+
+" C tmeplate
+autocmd BufNewFile *.c call setline(1, [
+    \ '//usr/bin/env gcc -O0 -o "${0%.*}_bin" "${0}" && "${0%.*}_bin"; rm "${0%.*}_bin" 2> /dev/null; exit 0',
+    \ '',
+    \ '# include <stdio.h>',
+    \ '',
+    \ '# define EXIT_SUCCESS 0',
+    \ '# define EXIT_FAILURE 1',
+    \ '',
+    \ 'int main(void) {',
+    \ '    printf("Hello World!\n");',
+    \ '    return EXIT_SUCCESS;',
+    \ '}',
+    \ ''
+\])
+
+" C++ tmeplate
+autocmd BufNewFile *.cpp,*.cxx,*.cc,*.c++ call setline(1, [
+    \ '//usr/bin/env gcc -lstdc++ -O0 -o "${0%.*}_bin" "${0}" && "${0%.*}_bin"; rm "${0%.*}_bin" 2> /dev/null; exit 0',
+    \ '',
+    \ '# include <iostream>',
+    \ '',
+    \ '# define EXIT_SUCCESS 0',
+    \ '# define EXIT_FAILURE 1',
+    \ '',
+    \ 'int main(void) {',
+    \ "    std::cout << \"Hello World!\" << '\\n';",
+    \ '    return EXIT_SUCCESS;',
+    \ '}',
+    \ ''
+\])
+
+" Python tmeplate
+autocmd BufNewFile *.py call setline(1, [
+    \ "#!/usr/bin/env python3",
+    \ "",
+    \ "def main():",
+    \ "    print()",
+    \ "",
+    \ "if __name__ == '__main__':",
+    \ "    main()",
+    \ ""
+\])
+
+" Bash tmeplate
+autocmd BufNewFile *.sh call setline(1, [
+    \ '#!/usr/bin/env bash',
+    \ '',
+    \ 'set -euo pipefail',
+    \ '',
+    \ 'function main() {',
+    \ '    echo "Hello World!"',
+    \ '}',
+    \ '',
+    \ 'main "${@}"',
+    \ ''
+\])
+

@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+
+LESSON_DIRECTORY="${HOME}/English"
+PROMPT_HISTORY="${LESSON_DIRECTORY}/.prompt_history"
+FILE=
+
+function LOG() {
+    local _type="$1"
+    shift
+    case ${_type} in
+        info)
+            printf "[%s]: %s\n" "INFO" "$*"
+            ;;
+        error)
+            printf "[%s]: %s\n" "ERROR" "$*"
+            ;;
+    esac
+}
+
+function Usage() {
+    printf "%s\n" "Usage: ${0##*/} edit|delete N"
+}
+
+function CreateDirectory() {
+    mkdir -p "${LESSON_DIRECTORY}" && \
+        LOG info "Directory created: ${LESSON_DIRECTORY}"
+}
+
+function CreateFile() {
+    local File="$1"
+    local Prompt=
+    mkdir -p "${PROMPT_HISTORY%/*}"
+    touch "${PROMPT_HISTORY}"
+    # Loop to get unique prompt
+    LOG info "Generating the prompt for you"
+    for ((i=0;i<10;i++)); do
+        Prompt=$(tgpt --quiet "Give me one short writing prompt to improve my English writing fluency, 1–2 sentences. No explanation. No intro. Only the prompt. Seed: $RANDOM")
+        # Strip weird chars just in case
+        Prompt=$(echo "${Prompt}" | tr -cd '[:print:]\n')
+        grep -Fxq "${Prompt}" "${PROMPT_HISTORY}" || break
+    done
+
+    echo "${Prompt}" >> "${PROMPT_HISTORY}"
+
+    printf "%s\n" \
+        "# vim:filetype=markdown" \
+        "" \
+        "_Date: $(date '+%Y-%m-%d')_" \
+        "" \
+        "# Lesson ${num}" \
+        "" \
+        "### Prompt" \
+        "> ${Prompt}" \
+        "" \
+        "### Entry" \
+        ">" \
+        > "${File}" && \
+        LOG info "File created: ${File}"
+}
+
+function DeleteFile() {
+    local file="$1"
+    if [[ -f ${file} ]] && rm -f "${file}"; then
+        LOG info "Cleaned: ${file}"
+    else
+        LOG info "File: ${file} does not exist"
+    fi
+}
+
+function EditFile() {
+    local -r File="$1"
+    local -r num="$2"
+    export EDITOR
+
+    LOG info "Editing ${File}"
+    ${EDITOR:-vim} "${File}"
+}
+
+function main() {
+    local edit_file=0 edit_file=0
+    local -g num=0
+
+    for arg in "$@"; do
+        if [[ ${arg} =~ ^(-h|--help|help)$ ]]; then
+            Usage
+        fi
+        if [[ ${arg} =~ ^[0-9]+$ ]]; then
+            FILE="${LESSON_DIRECTORY}/Lession_${arg}.md"
+            num=${arg}
+        fi
+        if [[ "${arg}" =~ ^(-d|--delete|delete)$ ]]; then
+            delete_file=1
+        fi
+        if [[ "${arg}" =~ ^(-e|--edit|edit)$ ]]; then
+            edit_file=1
+        fi
+    done
+
+    if [[ ! -d "${LESSON_DIRECTORY}" ]]; then
+        CreateDirectory "${LESSON_DIRECTORY}"
+    fi
+
+    if [[ -n "${FILE}" && $delete_file -eq 1 ]]; then
+        DeleteFile "${FILE}"
+    elif [[ -n "${FILE}" && ! -s "${FILE}" ]]; then
+        CreateFile "${FILE}"
+    fi
+
+    if [[ $edit_file -eq 1 ]]; then
+        [[ ! -f "${FILE}" ]] && LOG error "File '${FILE}' does not exist"
+        EditFile "${FILE}"
+    fi
+}
+
+[[ $# -eq 0 ]] && {
+    LOG error "No enough arguments were given"
+    exit 1
+}
+
+main "$@"
+

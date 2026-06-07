@@ -1,0 +1,52 @@
+[tag] <module>: <what changed>
+
+# ─────────────────────────────────────────────────────────────
+# Examples:
+# [add] arg: added --loop-mode
+# [fix] volume: clamp between 0–100
+# [refactor] ipc: split logger from playback core
+# [perf] logger: slashed CPU usage by 80%
+# [docs] readme: added mpv usage instructions
+# [test] args: test invalid --vol inputs
+# [style] output: align song info display
+# [chore] deps: upgraded socat version pin
+# [log] ipc: added verbose output on socket events
+# [clean] loop: removed deprecated flags
+# [mv] ipc: moved socket log to new module
+# [new] theme: added dynamic color scheme support
+# [rm] play: removed legacy fzf block
+#
+# ─────────────────────────────────────────────────────────────
+# Command-style tags (meta / intention based):
+#   [add]        = Introduced a new feature or line of logic
+#   [fix]        = Bug fix, incorrect logic, broken behavior
+#   [refactor]   = Reorganized, optimized, or restructured code
+#   [perf]       = Performance improvement (CPU, mem, I/O)
+#   [docs]       = Docs, inline comments, usage help, README
+#   [test]       = Added test code or verification logic
+#   [style]      = Aesthetic changes (formatting, spacing)
+#   [chore]      = CI, packaging, dependency bumps, meta tasks
+#   [log]        = Debug, trace, or runtime logging changes
+#   [clean]      = Removed unused junk, cleanup-only
+#   [mv]         = File/module rename or moved to new location
+#   [new]        = New standalone module, subcomponent, or dir
+#   [rm]         = Removed a feature, arg, block, or component
+
+#   [env]        = Shell/env-related, e.g., exported var, rc
+#   [sec]        = Security patch, permission fix, auth stuff
+#   [deprecate]  = Marked something for future removal
+#   [hotfix]     = Immediate fix for critical issue
+#   [ci]         = Commit affects CI, build scripts, hooks
+#   [ux]         = UX behavior, default changes, arg renaming
+#
+# ─────────────────────────────────────────────────────────────
+
+# Example:
+# [mv] ipc: moved status logger to ./core/ipc_status.sh
+#
+# Extracted background logger logic from PlayMusic. Now lives
+# inside its own module. Future expansion of visualizers will
+# plug into this new file.
+#
+# Changed import path in main(). CLI unchanged.
+

@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+
+### Run this script with sudo
+
+### Declutter your desktop session files
+
+set -euo pipefail
+
+function log() {
+    local type_="${1}"; shift 1
+    printf '[%s]: %s\n' "${type_}" "${*}"
+}
+
+function Wayland_sway_desktop() {
+    local desktop_file="${1}"
+    sudo tee "${desktop_file}" &>/dev/null << EOF
+[Desktop Entry]
+Name=Sway (Wayland)
+Comment=An i3-compatible Wayland compositor
+Exec=env \
+    XDG_CURRENT_DESKTOP=sway \
+    XDG_SESSION_DESKTOP=sway \
+    XDG_SESSION_TYPE=wayland \
+    QT_QPA_PLATFORM=wayland \
+    GDK_BACKEND=wayland \
+    XDG_DESKTOP_PORTAL_BACKEND=wlr \
+    QT_QPA_PLATFORMTHEME=qt6ct \
+    WLR_RENDERER=vulkan sway --unsupported-gpu
+Type=Application
+Keywords=tiling;wayland;compositor;sway;
+
+EOF
+    sudo sed -i 's/    //g' "${desktop_file}"
+}
+
+function Wayland_hyprland_desktop() {
+    local desktop_file="${1}"
+    sudo tee "${desktop_file}" &>/dev/null << EOF
+[Desktop Entry]
+Name=Hyprland (Wayland)
+Comment=An intelligent dynamic tiling Wayland compositor
+DesktopNames=Hyprland
+Exec=env \
+    QT_QPA_PLATFORM=wayland \
+    WLR_RENDERER=vulkan Hyprland
+Type=Application
+Keywords=tiling;wayland;compositor;hyprland;
+
+EOF
+    sudo sed -i 's/    //g' "${desktop_file}"
+}
+
+function Wayland_plasma_desktop() {
+    local desktop_file="${1}"
+    sudo tee "${desktop_file}" &>/dev/null << EOF
+[Desktop Entry]
+Name=Plasma (Wayland)
+Comment=Plasma by KDE
+DesktopNames=KDE
+Exec=env XDG_SESSION_TYPE=wayland \
+    QT_QPA_PLATFORM=wayland \
+    XDG_DESKTOP_PORTAL_BACKEND=wlr \
+    GTK_THEME=Breeze:dark \
+    QT_QPA_PLATFORMTHEME= startplasma-wayland
+TryExec=/usr/bin/startplasma-wayland
+Keywords=plasma;kde;
+
+EOF
+    sudo sed -i 's/    //g' "${desktop_file}"
+}
+
+function Wayland_gnome_desktop() {
+    local desktop_file="${1}"
+    sudo tee "${desktop_file}" &>/dev/null << EOF
+[Desktop Entry]
+Name=GNOME (Wayland)
+Type=Application
+Comment=This session logs you into GNOME
+Exec=/usr/bin/gnome-session
+TryExec=/usr/bin/gnome-session
+DesktopNames=GNOME
+X-GDM-SessionRegisters=true
+X-GDM-CanRunHeadless=true
+
+EOF
+    sudo sed -i 's/    //g' "${desktop_file}"
+}
+
+function X11_i3_desktop() {
+    local desktop_file="${1}"
+    sudo tee "${desktop_file}" &>/dev/null << EOF
+[Desktop Entry]
+Name=i3 (X11)
+Type=Application
+Exec=i3
+TryExec=i3
+DesktopNames=i3
+Comment=improved dynamic tiling window manager (X11)
+X-LightDM-DesktopName=i3
+Keywords=tiling;wm;windowmanager;window;manager;
+
+EOF
+    sudo sed -i 's/    //g' "${desktop_file}"
+}
+
+function X11_gnome_desktop() {
+    local desktop_file="${1}"
+    sudo tee "${desktop_file}" &>/dev/null << EOF
+[Desktop Entry]
+Name=GNOME (X11)
+Type=Application
+Exec=/usr/bin/gnome-session
+TryExec=/usr/bin/gnome-session
+DesktopNames=GNOME
+Comment=This session logs you into GNOME (X11)
+X-GDM-SessionRegisters=true
+X-GDM-CanRunHeadless=true
+
+EOF
+    sudo sed -i 's/    //g' "${desktop_file}"
+}
+
+function X11_plasma_desktop() {
+    local desktop_file="${1}"
+    sudo tee "${desktop_file}" &>/dev/null << EOF
+[Desktop Entry]
+Name=Plasma (X11)
+Type=XSession
+Exec=/usr/bin/startplasma-x11
+TryExec=/usr/bin/startplasma-x11
+DesktopNames=KDE
+Comment=Plasma by KDE
+X-KDE-PluginInfo-Version=6.3.1
+
+EOF
+    sudo sed -i 's/    //g' "${desktop_file}"
+}
+
+function RestoreWaylandDesktopFiles() {
+    cd /usr/share/wayland-sessions/ || \
+        { log error "Failed to chdir to '/usr/share/wayland-sessions/'"; return 1; }
+    for session_file in ./*; do
+        case "${session_file}" in
+            ./classic*|./*uwsm*|./gnome.*)
+                sudo rm -f "${session_file}"
+            ;;
+        esac
+
+        case "${session_file}" in
+            ./sway.desktop)
+                { Wayland_sway_desktop "${session_file}" && \
+                    log info "Fixed sway (Wayland) desktop session file: '${session_file}'"; } || \
+                    log error "Failed to fix '${session_file}'"
+                ;;
+            ./hyprland.desktop)
+                { Wayland_hyprland_desktop "${session_file}" && \
+                    log info "Fixed hyprland (Wayland) desktop session file: '${session_file}'"; } || \
+                    log error "Failed to fix '${session_file}'"
+                ;;
+            ./plasma.desktop)
+                { Wayland_plasma_desktop "${session_file}" && \
+                    log info "Fixed plasma (Wayland) desktop session file: '${session_file}'"; } || \
+                    log error "Failed to fix '${session_file}'"
+                ;;
+            ./*gnome-wayland.*)
+                { Wayland_gnome_desktop "${session_file}" && \
+                    log info "Fixed gnome (Wayland) desktop session file: /usr/share/wayland-sessions/${session_file}"; } || \
+                    log error "Failed to fix '${session_file}'"
+                ;;
+        esac
+    done
+}
+
+
+function RestoreX11DesktopFiles() {
+    cd /usr/share/xsessions/ || \
+        { log error "Failed to chdir to '/usr/share/xsessions/'"; return 1; }
+    for session_file in ./*; do
+        case "${session_file}" in
+            ./*classic*|*gnome-*|*with*)
+                sudo rm -f "${session_file}"
+                ;;
+        esac
+
+        case "${session_file}" in
+            ./*i3.desktop)
+                { X11_i3_desktop "${session_file}" && \
+                    log info "Fixed i3 (X11) desktop session file: '${session_file}'"; } || \
+                    log error "Failed to fix '${session_file}'"
+                ;;
+            ./*plasmax11.desktop)
+                { X11_plasma_desktop "${session_file}" && \
+                    log info "Fixed plasma (X11) desktop session file: '${session_file}'"; } || \
+                    log error "Failed to fix '${session_file}'"
+                ;;
+            ./*gnome.desktop)
+                { X11_gnome_desktop "${session_file}" && \
+                    log info "Fixed gnome (X11) desktop session file: '${session_file}'"; } || \
+                    log error "Failed to fix '${session_file}'"
+                ;;
+        esac
+    done
+}
+
+function main() {
+    RestoreWaylandDesktopFiles
+    RestoreX11DesktopFiles
+}
+
+main "$@"
+

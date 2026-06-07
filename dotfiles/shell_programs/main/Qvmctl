@@ -1,0 +1,1125 @@
+#!/usr/bin/env bash
+
+# Copyright (C) 2025 Rustlog
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+#  @Author: Rustlog
+#  @Github: https://github.com/Rustlog/qvmctl
+#  @Version: v1.1
+#  @License: GPLv3
+
+# Error on non-zero return code, unset var, fail early in pipe on non-zero status
+set -euo pipefail
+
+# package info
+VERSION="v1.1"
+AUTHOR="Rustlog"
+LICENSE="GPLv3"
+REMOTE_REPO="https://github.com/Rustlog/qvmctl"
+builtin readonly VERSION AUTHOR LICENSE REMOTE_REPO
+
+# Global readonly vars
+ACCESS_GROUP="qvmctl"
+PROGRAM_NAME="${0##*/}"
+D_CONFIG_DIR="${HOME}/.config/${PROGRAM_NAME,,}"
+D_STATE_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/${UID:-$(id -u)}}/${ACCESS_GROUP}"
+
+builtin readonly ACCESS_GROUP PROGRAM_NAME D_CONFIG_DIR D_STATE_RUNTIME_DIR
+
+# Global mutable vars
+PROFILE_NAME=""
+F_PROFILE_PATH=""
+STATE_FILE=""
+SOCK_FILE=""
+LOG_FILE=""
+NO_COLOR=1
+VERBOSE=0
+LOGLEVEL=2
+IFS=$' '
+
+# Pretty logger
+function log() {
+    local _type="${1}"; shift
+    local _color="" _t="" _exit_code=0
+    local default_loglevel=2 severity=0
+
+    local -A loglevel=(
+        [error]=1
+        [warn]=1
+        [fatal]=1
+        [cmd_error]=1
+        [info]=2
+        [cmd_info]=2
+        [debug]=3
+    )
+
+    severity="${loglevel[$_type]:-${default_loglevel}}"
+
+    (( LOGLEVEL >= severity )) || return 0
+
+    if [[ "$NO_COLOR" -eq 0 ]]; then
+        local -g _info_color="\033[38;2;85;255;126m" \
+            _warn_color="\033[38;2;255;170;10m" \
+            _error_color="\033[38;2;244;29;31m" \
+            _fatal_color="\033[5m\033[38;2;255;0;0m" \
+            _other_color="\033[38;2;251;255;208m" \
+            _nc="\033[0m"
+    else
+        _info_color="" _warn_color="" _error_color=""
+        _fatal_color="" _other_color="" _nc=""
+    fi
+
+    case "${_type}" in
+        info) _color="${_info_color:-}" _t="*"                ;;
+        warn) _color="${_warn_color:-}" _t="^"                ;;
+        error) _color="${_error_color:-}" _t="!" _exit_code=1 ;;
+        fatal) _color="${_fatal_color:-}" _t="#" _exit_code=1 ;;
+        *) _color="${_other_color-""}" _t=""                  ;;
+    esac
+
+    if is_flag_enabled "$VERBOSE"; then
+        printf "[%b%s%b%s]: %s: %b\n" \
+            "${_color}" "${_type}" "${_nc}" "${_t}" "${FUNCNAME[1]}()" "${*//$HOME/\~}"
+        return $_exit_code
+    fi
+    printf "[%b%s%b%s]: %b\n" \
+        "${_color}" "${_type}" "${_nc}" "${_t}" "${*//$HOME/\~}"
+    return $_exit_code
+}
+
+# Show user real USAGE
+function ShowUsage() {
+    local n="${PROGRAM_NAME}"
+    printf '%b\n' \
+        "usage: ${PROGRAM_NAME} [OPTIONS] [[PROFILES],override=value ...]" \
+        "options:" \
+        "   -lp,--list-profiles    list available" \
+        "   -lr,--list-running     list running VMs" \
+        "    -h,--help             show this and exit" \
+        "    -v,--verbose          verbose mode" \
+        "    -p,--profile          specify profile" \
+        "    -c,--comment          comment when creating profile" \
+        "    -d,--delete           delete a profile" \
+        "    -k,--kill             kill a qemu instance" \
+        "    -s,--shutdown         shutdown a qemu instance" \
+        "    -r,--reset            reset a qemu instance" \
+        "       --rename           rename 'old_name' to 'new_name'" \
+        "       --iso              path to installation iso" \
+        "       --image            path to existing disk image" \
+        "       --attach           attach disk to a running qemu instance" \
+        "       --create           create disk image" \
+        "       --enable-kvm       enable kvm accel for guest" \
+        "       --boot             boot from iso" \
+        "       --no-color         force no-color" \
+        "       --cat              concatinate a profile" \
+        "       --edit             edit a profile" \
+        "" \
+        "syntax example:" \
+        "   # overrides/action per profile" \
+        "       $ $n [NAME],{boot,kvm,ram,cpu,net,disk,name,shutdown,reset,kill,log,desc}" \
+        "   # create new disk + profile + inlined comment, multiple --create supported" \
+        "       $ $n --create [DISK_NAME],[format],[size] [profile_name] -c \"Fedora testing\" " \
+        "examples:" \
+        "   $ $n -e fedora -c \"fedora [testing]\"       # new profile + infile comment" \
+        "   $ $n fedora,ram=4G,boot=1                  # boot from iso" \
+        "   $ $n fedora,logs                           # qmp logs" \
+        "   $ $n --rename fedora fedora-test           # rename profile" \
+        "   $ $n -d fedora                             # delete profile"
+}
+
+# Input => colored blue
+function ColorPath() {
+	local blue="\033[38;2;150;134;255m" nc="\033[0m"
+    printf '%b\n' "${blue}${1}${nc}"
+}
+
+# Pornify with asm!
+function ColorCMD() {
+    ! command -v bat &> /dev/null && printf '%b\n' "${1}"
+    bat --color="$( \
+        is_flag_disabled "$NO_COLOR" && \
+        printf '%s\n' always || printf '%s\n' never \
+    )" --decorations=never \
+        --paging=never --language=asm <<< "${1//$HOME/\~}"
+}
+
+# HELPER function -- Variable is not empty
+function require_var() {
+    local var="${1:-}" _type="${2:-}" msg="${3:-}"
+    [[ -n "${var}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- check it it's non-empty arr
+function require_arr() {
+    local -n arr=${1:-}
+    local _type="${2:-}" msg="${3:-}"
+    { [[ "${#arr[@]}" -gt 0 ]] && \
+        declare -p -- "${!arr}" | \
+        grep "declare -a" &> /dev/null; } && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Variable is empty
+function is_var_empty() {
+    local var="${1:-}" _type="${2:-}" msg="${3:-}"
+    [[ -z "${var}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check file existance
+function require_file() {
+    local file="${1}" _type="${2:-}" msg="${3:-}"
+    [[ -s "${file}" && -f "${file}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check file existance
+function require_regular_file() {
+    local file="${1}" _type="${2:-}" msg="${3:-}"
+    [[ -f "${file}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check directory existance
+function require_dir() {
+    local dir="${1}" _type="${2:-}" msg="${3:-}"
+    [[ -d "${dir}" ]] && return 0
+    [[ -n "${msg}" ]] && log "${_type}" "${msg}"
+    return 1
+}
+
+# HELPER function -- Check enabled state
+function is_flag_enabled() {
+    local -i var=${1}
+    [[ "$var" -eq 1 ]] && return 0
+    return 1
+}
+
+# HELPER function -- Check disabled state
+function is_flag_disabled() {
+    local -i var=${1}
+    [[ "$var" -eq 0 ]] && return 0
+    return 1
+}
+
+# Show info about this tool
+function ShowInfo() {
+    local action_type="${1}"
+    case "${action_type}" in
+        license) printf '%s\n' "${LICENSE}"  ;;
+        version) printf '%s\n' "${VERSION}"  ;;
+        author) printf '%s\n' "${AUTHOR}"    ;;
+        repo) printf '%s\n' "${REMOTE_REPO}" ;;
+        about)
+            printf '%s\n' \
+                "License: ${LICENSE}" \
+                "Version: ${VERSION}" \
+                "Author: ${AUTHOR}" \
+                "Repo: ${REMOTE_REPO}"
+            ;;
+    esac
+}
+
+# HELPER function -- edit file
+function EditProfile() {
+    "${EDITOR:-vim}" "${F_PROFILE_PATH}"
+}
+
+# Generate random MAC address
+function Mac() {
+    od -An -N6 -tx1 /dev/urandom | awk '{
+        orig = strtonum("0x" $1)          # first random byte as number
+        high6 = int(and(orig, 252) / 4)   # 252 = 0b11111100 -> keep 6 bits, shift right 2
+        first = high6 + 2                 # add 0b10 -> unicast + locally-administered
+        printf "%02x:%02x:%02x:%02x:%02x:%02x\n",
+        first, strtonum("0x"$2), strtonum("0x"$3),
+        strtonum("0x"$4), strtonum("0x"$5), strtonum("0x"$6)
+    }'
+}
+
+# Validate profiles
+function ValidateProfile() {
+    local -a total_keys=(
+        GUEST_DISK GUEST_ISO BOOT_FROM_ISO
+        GUEST_CPU_MODEL GUEST_SMP GUEST_MEMORY GUEST_ACCEL
+        GUEST_VIDEO_DEVICE HOST_DISPLAY GUEST_AUDIO GUEST_NETWORK
+        QEMU_EXTRA_ARGS
+    )
+    # shellcheck disable=SC1090
+    source "${F_PROFILE_PATH}"
+    for key in "${total_keys[@]}"; do
+        declare -p "${key}" | grep -q 'declare -a' || \
+            log error "array '${key}' missing in profile '$(ColorPath "${F_PROFILE_PATH}")'"
+    done
+}
+
+function show_launch_summary() {
+    printf '%b\n' \
+        "Profile:       '${PROFILE_NAME}'" \
+        "" \
+        "guest ram:     '${GUEST_MEMORY[0]:-${DEFAULT_RAM}}'" \
+        "guest cpu:     '${GUEST_CPU_MODEL[0]}'" \
+        "guest image:   '${GUEST_DISK[0]//$HOME/\~}'" \
+        "live iso:      '${GUEST_ISO[0]//$HOME/\~}'" \
+        "boot from iso: '${BOOT_FROM_ISO[0]}'" \
+        "accel:         '${GUEST_ACCEL[0]}'" \
+        "network:       '${GUEST_NETWORK[0]}'" \
+        "audio:         '${GUEST_AUDIO[0]}'" \
+        ""
+    VERBOSE=0
+    log cmd_info "qemu-system-x86_64 $(ColorCMD "${qemu_args[*]}")"
+    VERBOSE=1
+}
+
+# The default template for new profiles
+function WriteNewProfile() {
+    local img="${1:-}" iso="${2:-}"
+    local comment="${3:-}"
+    require_var "${comment}" && comment=" ${comment}"
+    if cat > "${F_PROFILE_PATH}" << EOF
+#!/usr/bin/env false
+
+#@# === Profile '${F_PROFILE_PATH##*/}' === #@#
+
+# COMMENT =${comment}
+
+#########################
+# ###  Disks & Boot ### #
+#########################
+
+# Full path to the main disk image ( qcow or raw )
+GUEST_DISK=( "${img//$HOME/\~}" )
+
+# Full path to installation/live ISO (leave empty if not needed)
+GUEST_ISO=( "${iso//$HOME/\~}" )
+
+# Boot from ISO (1 = yes), override with ,boot=1
+BOOT_FROM_ISO=( "0" )
+
+########################
+# ### CPU & Memory ### #
+########################
+
+# CPU model:
+#   host  -> exact host CPU passthrough
+GUEST_CPU_MODEL=( "EPYC" )
+
+# vCPU topology — match your real CPU for best performance
+# Example on a host machine:
+# 6 total cores, 2 threads each core: sockets=1,cores=6,threads=2
+GUEST_SMP=( "cpus=\$((\$(nproc)/2))" )
+
+# amount of RAM. Supports suffixes: 8G, 4096M, 16384M etc.
+# Leave empty -> auto = roughly 1/3 of host RAM
+GUEST_MEMORY=( "" )
+
+###################################
+# ### Acceleration & Graphics ### #
+###################################
+
+# KVM hardware acceleration
+# (requires user in 'kvm' group), override with ,kvm=0
+GUEST_ACCEL=( "1" )
+
+# Guest vCPU - default (virtio + VirGL)
+GUEST_VIDEO_DEVICE=( "" )
+
+# Display window - gtk + OpenGL is good
+HOST_DISPLAY=( "gtk" )
+
+##############################
+# ### Audio & Networking ### #
+##############################
+
+# Audio backend: pipewire (default), pa, alsa, or none
+GUEST_AUDIO=( "pipewire" )
+
+# Networking mode.
+#   nat     -> default user-mode NAT (e1000e)
+#   passt   -> modern, faster, needs 'passt' binary installed
+#   none    -> no network
+GUEST_NETWORK=( "nat" )
+
+####################
+# ### Behavior ### #
+####################
+
+# Extra raw QEMU arguments - if you know any
+QEMU_EXTRA_ARGS=(
+    "-usb" "-device" "usb-tablet"
+)
+
+## NOTE ##:
+# ==> Raw args like --netdev ... -device are supported in every option.
+# ==> If only "..." is given instead of "-device" "..."
+# "-cpu"|"-smp"|"-device"|"-netdev"|"-nic" etc, will be prefixed
+# with your string like this "-device" "..." .
+
+
+# ### Misc ### #
+# Consider changing this path to your userspace dir
+DEFAULT_DISK_PATH=( "/var/lib/${ACCESS_GROUP}" )
+
+# vim: sts=4 sw=4 et:
+# vim: filetype=sh:
+
+EOF
+    then
+        log info "Profile created: '$(ColorPath "${F_PROFILE_PATH}")'"
+    else
+        log error "Failed to create: '$(ColorPath "${F_PROFILE_PATH}")'"
+    fi
+}
+
+# List available profiles
+function ListProfiles() {
+    require_var "$(find "${D_CONFIG_DIR}" -type f -print -quit 2> /dev/null)" || \
+        { log warn "no profiles available in directory (${D_CONFIG_DIR})"; return 0; }
+    printf '%s\n' "available profiles at '$(ColorPath "${D_CONFIG_DIR}")/*'"
+    for profile in "${D_CONFIG_DIR}"/*; do
+        require_file "${profile}" || continue
+        printf '    %-20b = %s\n' \
+            "${profile##*/}" \
+            "$( \
+                grep -o 'COMMENT = .*' "${profile}" | \
+                sed 's/COMMENT =//g' || \
+                printf '[no comment]'
+            )"
+    done
+}
+
+function cpu_usage() {
+    local pid=${1:-}
+    local cores="${2-"1"}"
+    local utime stime cutime cstime starttime
+
+    IFS=$' ' read -r utime stime cutime cstime starttime < <(
+        cut -d' ' -f"14,15,16,17,22" "/proc/${pid}/stat" 2>/dev/null || return 1
+    )
+    uptime="$(cut -d' ' -f1 /proc/uptime)"
+    clk_ticks="$(getconf CLK_TCK)"
+    #  clk_ticks = system clock per second
+    #  elapsed time = system_uptime - (program_start_time - clk_ticks)
+    #  calculation = (utime + stime + cutime + cstime)/(clk_ticks*elapsed_time*core(s))*100
+    awk "BEGIN {
+        printf \"%0.2f\\n\",
+        ( (${utime} + ${stime} + ${cutime} + ${cstime}) / \
+            ($clk_ticks * ( ${uptime} - (${starttime}/$clk_ticks) ) * ${cores}) ) * 100
+    }"
+}
+
+# List running instance of VMs
+function ListRunning() {
+    local -a arr=()
+    local -a _arr=()
+    local pid_="" desc_="" cmd_="" rss_mem_=""
+    local dir_="" entry=""
+    local -a listed_dirs=()
+    mapfile -t listed_dirs < <(find "${D_STATE_RUNTIME_DIR}" -mindepth 1 -maxdepth 1 -type d)
+    [[ "${#listed_dirs[@]}" -eq 0 ]] && return 1
+    for dir_ in "${listed_dirs[@]}"; do
+        if ! require_regular_file "${dir_}/state"; then
+            rmdir "${dir_}" 2> /dev/null || true
+            return 1
+        fi
+        mapfile -t arr < <(cat "${dir_}/state")
+        for entry in "${arr[@]}"; do
+            IFS=$'|;' read -r -a _arr <<< "${entry}"
+            name_="${_arr[0]#*:}" pid_="${_arr[1]#*:}" desc_="${_arr[2]#*:}" cmd_="${_arr[3]#*:}"
+            [[ -d "/proc/${pid_}" ]] || \
+                { cd "${dir_:-}" && rm -f ./state; continue; }
+            rss_mem_="$( \
+                cat "/proc/${pid_}/statm" | cut -d ' ' -f2 | \
+                awk " { printf \"%0.3f\", (\$1*$(getconf PAGE_SIZE))/(1024*1024) } " \
+            )"
+            printf '%s\n' "Running VMs:"
+            is_flag_enabled "$VERBOSE" && \
+        { printf '    %s ==> %s ( mem: %s, cpu%%: [%s of %s core, %s of %s cores], cmd: %s )\n' \
+                    "${pid_}" "${desc_:-${name_}}" \
+                    "${rss_mem_} Mib" \
+                    "$(cpu_usage "${pid_}" "1")%" "1" \
+                    "$(cpu_usage "${pid_}" "$(nproc)")%" "$(nproc)" \
+                    "qemu-system-x86_64 ${cmd_//$HOME/\~}"; \
+                    return 0; }
+            printf "    %s ==> %s (mem: %s, cpu%%: [%s of %s core, %s of %s cores]) \n" \
+                "${pid_}" "${desc_:-${name_}}" \
+                "${rss_mem_} Mib" \
+                "$(cpu_usage "${pid_}" "1")%" "1" \
+                "$(cpu_usage "${pid_}" "$(nproc)")%" "$(nproc)"
+        done
+    done
+}
+
+# kill running vm
+function KillRunningVM() {
+    local profile_name_="${1:-}"
+    local pid_="" name_="" state_file=""
+    local -a _arr=() t_arr=()
+    state_file="${D_STATE_RUNTIME_DIR}/${profile_name_}/state"
+    [[ -s "${state_file}" ]] || return 1
+    mapfile -t _arr < "${state_file}"
+    for line in "${_arr[@]}"; do
+        IFS=$'|;' read -r -a t_arr <<< "${line}"
+        name_="${t_arr[0]#*:}" pid_="${t_arr[1]#*:}"
+        [[ "${name_}" == "${profile_name_}" ]] || continue
+        [[ -d "/proc/${pid_}/" ]] || \
+            { sed -i "/${pid_}/d" "${state_file}"; continue; }
+        { kill -SIGINT "${pid_}" || kill -SIGTERM "${pid_}"; } || \
+            log error "Failed to kill '${profile_name_}'"
+        log info "Killed '${pid_}' -> '${profile_name_}'"
+        sed -i "/${pid_}/d" "${state_file}"
+        if [[ ! -s "${state_file}" && -f "${state_file}" ]]; then
+            cd "${D_STATE_RUNTIME_DIR}/${profile_name_}" || { log error \
+                "failed chdir to '${D_STATE_RUNTIME_DIR}/${profile_name_}'"; return 1; }
+            rm -f ./state
+        fi
+        (sleep 0.4 && { rmdir "${D_STATE_RUNTIME_DIR}/${profile_name_}" \
+            2>/dev/null || true; }) & disown
+    done
+}
+
+# Attach a new disk
+function AttachDevice() {
+    local disk_path="${1:-}" node_name="${2:-}" \
+        disk_driver="${3:-}" profile_name_="${4:-}"
+    local qmp_cmd=""
+    # Map file extension to QEMU block driver
+    local default_driver="raw"
+    local -A ext2driver=(
+        [qcow2]="qcow2" [qcow]="qcow"
+        [raw]="raw" [vmdk]="vmdk"
+        [vdi]="vdi" [vhdx]="vhdx"
+        [iso]="raw" [img]="raw"
+        [dmg]="dmg" [vvfat]="vvfat"
+        [rbd]="rbd" [nbd]="nbd"
+        [host_device]="file"
+    )
+
+    require_var "${disk_driver}" || disk_driver="${ext2driver[${disk_path##*.}]:-$default_driver}"
+    require_var "${SOCK_FILE}" || SOCK_FILE="${D_STATE_RUNTIME_DIR}/${profile_name_}/sock"
+    require_var "${LOG_FILE}" || LOG_FILE="${D_STATE_RUNTIME_DIR}/${profile_name_}/log"
+
+    qmp_cmd="$(cat << EOF
+    {"execute":"qmp_capabilities"}
+    {"execute":"blockdev-add",
+        "arguments":{
+            "driver":"${disk_driver}",
+            "node-name":"${node_name}",
+            "file": {
+                "driver":"file",
+                "filename":"${disk_path}"
+            }
+        }
+    }
+    {"execute":"device_add",
+        "arguments": {
+            "driver":"virtio-blk-pci",
+            "drive":"${node_name}",
+            "id":"qemu_${node_name}"
+        }
+    }
+EOF
+)"
+    {
+        printf '%b\n' "${qmp_cmd}"
+        printf '%b\n' "${qmp_cmd}" | socat - UNIX-CONNECT:"${SOCK_FILE}" || true
+        printf '%b\n' "\n\n"
+    }  &>> "${LOG_FILE}"
+}
+
+# Ask guest for graceful shutdown
+function ShutdownVM() {
+    local profile_name_="${1:-}"
+    local qmp_cmd=""
+
+    qmp_cmd="$(cat << EOF
+    {"execute":"qmp_capabilities"}
+    {"execute":"system_powerdown"}
+EOF
+)"
+    require_var "${SOCK_FILE}" || SOCK_FILE="${D_STATE_RUNTIME_DIR}/${profile_name_}/sock"
+    require_var "${LOG_FILE}" || LOG_FILE="${D_STATE_RUNTIME_DIR}/${profile_name_}/log"
+
+    {
+        printf '%b\n' "${qmp_cmd}"
+        printf '%b\n' "${qmp_cmd}" | socat - UNIX-CONNECT:"${SOCK_FILE}" || true
+        printf '%b\n' "\n\n"
+    }  &>> "${LOG_FILE}"
+}
+
+# Reset qemu vm
+function ResetVM() {
+    local profile_name_="${1:-}"
+    local qmp_cmd=""
+
+    qmp_cmd="$(cat << EOF
+    {"execute":"qmp_capabilities"}
+    {"execute":"system_reset"}
+EOF
+)"
+    require_var "${SOCK_FILE}" || SOCK_FILE="${D_STATE_RUNTIME_DIR}/${profile_name_}/sock"
+    require_var "${LOG_FILE}" || LOG_FILE="${D_STATE_RUNTIME_DIR}/${profile_name_}/log"
+
+    {
+        printf '%b\n' "${qmp_cmd}"
+        printf '%b\n' "${qmp_cmd}" | socat - UNIX-CONNECT:"${SOCK_FILE}" || true
+        printf '%b\n' "\n\n"
+    }  &>> "${LOG_FILE}"
+}
+
+# Attach to log file
+function AttachToLog() {
+    local profile_name_="${1}"
+    require_var "${LOG_FILE}" || \
+        LOG_FILE="${D_STATE_RUNTIME_DIR}/${profile_name_}/log"
+    require_file "${LOG_FILE}" || log warn \
+        "Log file doesn't contain any logs '${LOG_FILE}'"
+    require_regular_file "${LOG_FILE}" || printf '' > "${LOG_FILE}"
+    log info "Attached to log '${LOG_FILE}'"
+    tail -f "${LOG_FILE}"
+}
+
+# Cat the profile
+function CatProfile() {
+    command -v bat &> /dev/null || { cat "${F_PROFILE_PATH}"; return 0; }
+    bat --decorations=never --paging=never --color="$( \
+        { is_flag_disabled "$NO_COLOR" && printf always; } || printf never \
+    )" --language bash "${F_PROFILE_PATH}"
+}
+
+# Delete profile
+function DeleteProfile() {
+    local profile_name="${1}"
+    cd "${D_CONFIG_DIR}" || \
+        log error "Failed to chdir into '$(ColorPath "${D_CONFIG_DIR}")'"
+    require_regular_file "${D_CONFIG_DIR}/${profile_name}" || \
+        log error "Requested profile '${profile_name}' doesnt' exist"
+    if rm -f ./"${profile_name}"; then
+        log info "Deleted '$(ColorPath "${D_CONFIG_DIR}/${profile_name}")'"
+    else
+        log warn "Already deleted '$(ColorPath "${D_CONFIG_DIR}/${profile_name}")'"
+    fi
+}
+
+function CreateImage() {
+    local img="${1}" img_format="${2:-raw}"
+    local img_size="${3:-10G}" profile_name="${4:-}"
+    local img_path=""
+
+    require_var "${profile_name}" || log error \
+        "Failed to create image '${img}' profile not specified"
+
+    if ! require_file "${D_CONFIG_DIR}/${profile_name}"; then
+        F_PROFILE_PATH="${D_CONFIG_DIR}/${profile_name}"
+        WriteNewProfile "${img_path:-}" "" ""
+    fi
+
+    # shellcheck disable=SC1090
+    source <(grep -o "DEFAULT_DISK_PATH=(.*)" \
+        "${D_CONFIG_DIR}/${profile_name}" || exit 1)
+
+    img_path="${DEFAULT_DISK_PATH[0]:-}"
+
+    if [[ "${img}" == *.* ]]; then
+        img_format="${img##*.}"
+    fi
+
+    [[ "${img}" == */* ]] || img="${img_path}/${img}"
+
+    img_path="${img%/*}"
+    if [[ ! -d "${img_path}" ]]; then
+        if sudo mkdir -m0775 -p "${img_path}" && \
+            sudo chown "root:${ACCESS_GROUP}" "${img_path}"; then
+            log info "please add yourself to ${ACCESS_GROUP} group"
+        fi
+    fi
+
+    qemu-img create -f "${img_format%%.*}" \
+        "${img//\~/$HOME}.${img_format}" "${img_size}" || \
+        log error "Failed to create image" \
+            "'name: ${img}, format: ${img_format}, size: ${img_size}"
+    log info "Image created at '$(ColorPath "${img}.${img_format}")'" \
+        "name: ${img}, format: ${img_format}, size: ${img_size}"
+
+    local string_pattern="GUEST_DISK=(.*)" line="" old_string="" \
+        file="${D_CONFIG_DIR}/${profile_name}"
+    grep -q "${string_pattern}" "${file}" || log error \
+        "${string_pattern} is missing from config file"
+    line="$(awk "/${string_pattern}/ {ln=NR} END { if(ln) print ln }" "${file}")"
+    sed -i "${line}s@^@# @" "${file}"
+    old_string="$(sed -n "${line}p" "${file}")"
+    sed -i "${line}s@.*@${old_string}\nGUEST_DISK=( \"${img//\~/$HOME}.${img_format}\" )@" "${file}"
+}
+
+# Rename a profile
+function RenameProfile() {
+    local target_profile_name="${1}"
+    local target_rename="${2}"
+    cd "${D_CONFIG_DIR}" || \
+        log error "Failed to chdir into '$(ColorPath "${D_CONFIG_DIR}")'"
+    require_regular_file "${D_CONFIG_DIR}/${target_profile_name}" || \
+        log error "Requested profile '${target_profile_name}' doesn't exist"
+    if mv ./"${target_profile_name}" ./"${target_rename}"; then
+        log info "Moved" \
+            "'$(ColorPath "${D_CONFIG_DIR}/${target_profile_name}")'" \
+            "==> '$(ColorPath "${D_CONFIG_DIR}/${target_rename}")'"
+    else
+        log error "Failed to move '${target_profile_name}' -> '${target_rename}'"
+    fi
+}
+
+# Dynamically build args
+function BuildArgs() {
+    local -n qemu_args_ref=${1}
+    local -i num=${2}
+    local -a arr=()
+    local disk_format=""
+
+    # are we in kvm group?
+    if [[ "${GUEST_ACCEL[0]}" == "1" ]]; then
+        { ! id -nG "$USER" 2> /dev/null | grep -qw -- kvm && \
+            grep -o -- ^host <<< "${GUEST_CPU_MODEL[*]}"; } && \
+                log error "user not in kvm group, cannot use -cpu host"
+    fi
+
+    # Some defaults
+    DEFAULT_RAM="$(awk '/MemTotal:/ { printf "%d\n", ($2/1024)/3 }' /proc/meminfo)M"
+    DEFAULT_GUEST_CPU_MODEL="host,vendor=AuthenticAMD,model-id=QEMU Virtual CPU"
+
+    # Guest acceleration 1 = yes, 0 = no
+    case "${GUEST_ACCEL[0]:-default}" in
+        1) qemu_args_ref+=( "-enable-kvm" ) ;;
+        *) qemu_args_ref+=( "${GUEST_ACCEL[@]}" ) ;;
+    esac
+
+    # Boot from iso 1 = yes, 0 = no
+    case "${BOOT_FROM_ISO[0]:-0}" in
+        1) qemu_args_ref+=( "-boot" "once=d" ) ;;
+        0) qemu_args_ref+=( "-boot" "once=c" ) ;;
+        -boot) qemu_args_ref+=( "${BOOT_FROM_ISO[@]}" ) ;;
+        *) qemu_args_ref+=( "-boot" "${BOOT_FROM_ISO[0]}" ) ;;
+    esac
+
+    # Guest memeory
+    case "${GUEST_MEMORY[0]:-default}" in
+        [0-9]*[MKGPT]) qemu_args_ref+=( "-m" "${GUEST_MEMORY[0]}" ) ;;
+        default) qemu_args_ref+=( "-m" "${DEFAULT_RAM}" ) ;;
+        -m) qemu_args_ref+=( "${GUEST_MEMORY[@]}" ) ;;
+        *) qemu_args_ref+=( "-m" "${GUEST_MEMORY[0]}" ) ;;
+    esac
+
+    # Configure guest CPU model
+    case "${GUEST_CPU_MODEL[0]:-host}" in
+        host)  qemu_args_ref+=( "-cpu" "${DEFAULT_GUEST_CPU_MODEL}" ) ;;
+        -cpu) qemu_args_ref+=( "${GUEST_CPU_MODEL[@]}" ) ;;
+            *) qemu_args_ref+=( "-cpu" "${GUEST_CPU_MODEL[@]}" ) ;;
+    esac
+
+    # Guest vCPU topology
+    case "${GUEST_SMP[0]:-default}" in
+        default) qemu_args_ref+=(
+            "-smp" "sockets=1,cores=$(($(nproc)/2)),threads=2"
+            ) ;;
+        -smp) qemu_args_ref+=( "${GUEST_SMP[@]}" ) ;;
+        *) qemu_args_ref+=( "-smp" "${GUEST_SMP[0]}" ) ;;
+    esac
+
+    # Host display setup
+    case "${HOST_DISPLAY[0]:-gtk}" in
+        gtk) qemu_args_ref+=(
+            "-display" "gtk,gl=on,zoom-to-fit=on,show-menubar=off"
+            ) ;;
+        -display) qemu_args_ref+=( "${HOST_DISPLAY[@]}" ) ;;
+        *) qemu_args_ref+=( "-display" "${HOST_DISPLAY[0]}" ) ;;
+    esac
+
+    # Guest video configuration
+    case "${GUEST_VIDEO_DEVICE[0]:-default}" in
+        -vga|-device) qemu_args_ref+=( "${GUEST_VIDEO_DEVICE[@]}" ) ;;
+        default) qemu_args_ref+=( "-device" "virtio-gpu-gl-pci,max_outputs=1" ) ;;
+        *) qemu_args_ref+=( "-device" "${GUEST_VIDEO_DEVICE[0]}" ) ;;
+    esac
+
+    # Guest networking configuration
+    case "${GUEST_NETWORK[0]:-none}" in
+        passt) qemu_args_ref+=(
+        "-netdev" "passt,id=qemu_net_passt$num"
+    "-device" "virtio-net-pci,netdev=qemu_net_passt$num,mac=$(Mac)") ;;
+        boot|iso|old-nat) qemu_args_ref+=(
+        "-netdev" "user,id=qemu_net_old_nat$num"
+    "-device" "e1000e,netdev=qemu_net_old_nat$num,mac=$(Mac)") ;;
+        user|nat) qemu_args_ref+=(
+        "-netdev" "user,id=qemu_net_nat$num"
+    "-device" "virtio-net-pci,netdev=qemu_net_nat$num,mac=$(Mac)") ;;
+        none) qemu_args_ref+=( "-nic" "none") ;;
+        -nic|-netdev) qemu_args_ref+=( "${GUEST_NETWORK[@]}" ) ;;
+        *) qemu_args_ref+=( "-nic" "${GUEST_NETWORK[0]}" ) ;;
+    esac
+
+    # Guest audio configuration
+    case "${GUEST_AUDIO:-pa}" in
+        pipewire) qemu_args_ref+=(
+        "-audiodev" "pipewire,id=qemu_snd$num" "-device" "ich9-intel-hda"
+        "-device" "hda-duplex,audiodev=qemu_snd$num"
+            ) ;;
+        alsa) qemu_args_ref+=(
+        "-audiodev" "alsa,id=qemu_snd$num" "-device" "ich9-intel-hda"
+        "-device" "hda-duplex,audiodev=qemu_snd$num"
+            ) ;;
+        jack) qemu_args_ref+=(
+        "-audiodev" "jack,id=qemu_snd$num,server-name=jack" "-device" "ich9-intel-hda"
+        "-device" "hda-duplex,audiodev=qemu_snd$num"
+            ) ;;
+        pa|pulse|pulseaudio) qemu_args_ref+=(
+            "-audiodev"
+            "pa,id=snd0,server=unix:/run/user/${UID:-$(id -u)}/pulse/native"
+            ) ;;
+            -audiodev) qemu_args_ref+=( "${GUEST_AUDIO[@]}" ) ;;
+            *) qemu_args_ref+=(
+                "-audiodev" "${GUEST_AUDIO[0]}"
+                "-device" "${GUEST_AUDIO[1]}" ) ;;
+    esac
+
+    # QMP (QEMU Machine protocol)
+    if [[ -S "${SOCK_FILE}" ]]; then
+        log warn "Stale socket already exists '${SOCK_FILE}'"
+        cd "${D_STATE_RUNTIME_DIR}/${PROFILE_NAME}" || \
+            log error "Failed chdri into '${D_STATE_RUNTIME_DIR}/${PROFILE_NAME}'"
+        rm -f ./sock || log error "Failed to clean '${SOCK_FILE}'"
+        log info "Cleaned '${SOCK_FILE}'"
+    fi
+    qemu_args_ref+=(
+        "-qmp" "unix:${SOCK_FILE},server=on,wait=off"
+    )
+
+    # QEMU extra args
+    require_arr QEMU_EXTRA_ARGS && qemu_args_ref+=(
+        "${QEMU_EXTRA_ARGS[@]}"
+    )
+
+    # Path to disk image
+    require_var "${GUEST_DISK[0]##*.}" && disk_format="${GUEST_DISK[0]##*.}"
+    require_var "${GUEST_DISK[0]}" && qemu_args_ref+=(
+        "-drive"
+        "file=${GUEST_DISK[0]//\~/$HOME},format=${disk_format:-raw},media=disk,if=virtio"
+    )
+
+    # Path to installation iso
+    require_var "${GUEST_ISO[0]}" && qemu_args_ref+=(
+        "-drive"
+        "file=${GUEST_ISO[0]//\~/$HOME},format=raw,media=cdrom"
+    )
+}
+
+# Main function
+function main() {
+    local -a args=("${@}")
+
+    local -i override_boot_flag=0 show_usage=0 \
+        edit_profile=0 override_verbose=0 override_no_color=0 \
+            list_profiles=0 delete_profile=0 cat_profile=0 \
+                list_running=0 rename_profile=0
+
+    local -i kill_running_vm=0 override_kvm_flag=0 \
+        attach_to_log=0 reset_qemu_vm=0 shutdown_guest=0
+
+    local -a could_be_valid_profiles=()
+    local -a p_arr=()
+    local -a qemu_args=()
+
+    local profile="" comment="" override_guest_memory=""
+    local arg="" value="" desc="" valid_profile=""
+    local target_rename="" target="" override_guest_networking=""
+    local img_name="" img_format="" img_size=""
+    local img_path="" iso_path="" disk_format=""
+    local attach_disk="" override_guest_cpu_model=""
+    local -i m=0
+
+    # Globals defaults
+    DEFAULT_GUEST_CPU_MODEL=""
+    DEFAULT_RAM=""
+
+    consume_val() {
+        local -n variable_ref=${1}
+        local value="${2:-}"
+        local -n index_ref=${3}
+        [[ -n "${value}" ]] || return 1
+        variable_ref="${value}"
+        index_ref=$((index_ref+1))
+    }
+
+    for ((i=0;i<${#args[@]};i++)); do
+        arg="${args[$i]}" m=0
+        case "${arg}" in
+            -enable-kvm|--enable-kvm)   override_kvm_flag=1  m=1    ;;
+            -lp|--list|--list-pro*)     list_profiles=1 m=1         ;;
+            -lr|--list-run*)            list_running=1 m=1          ;;
+            --lp|-l)                    list_profiles=1 m=1         ;;
+            --lr)                       list_running=1 m=1          ;;
+            -boot|--boot)               override_boot_flag=1 m=1    ;;
+            -V|--verbose)               override_verbose=1 m=1      ;;
+            --no-color)                 override_no_color=1 m=1     ;;
+            -h|--help)                  show_usage=1 m=1            ;;
+            -v|--version)               ShowInfo version; return 0  ;;
+            --author)                   ShowInfo author; return 0   ;;
+            --license)                  ShowInfo license; return 0  ;;
+            --repo)                     ShowInfo repo; return 0     ;;
+            --about)                    ShowInfo about; return 0    ;;
+        esac
+
+        is_flag_enabled "$m" || continue
+
+        [[ -n "${args[i+1]:-}" && "${args[i+1]:-}" != -* ]] && \
+            value="${args[i+1]:-}" i=$((i+1))
+        if [[ "${arg}" == -* && "${arg}" == *=* ]]; then
+            IFS=$'=' read -r arg value <<< "${arg}"
+            require_var "${value}" || \
+                { log error "'${arg}' requires a value"; return 1; }
+        fi
+        case "${arg}" in
+            -p|--profile)               profile="${value}"          ;;
+            -c|--comment)               comment="${value}"          ;;
+            --img|--image)              img_path="${value}"         ;;
+            --iso|--cd)                 iso_path="${value}"         ;;
+            -d|--delete)
+                delete_profile=1;
+                consume_val profile "${value}" i                    ;;
+            --cat)
+                cat_profile=1;
+                consume_val profile "${value}" i                    ;;
+            -k|--kill)
+                kill_running_vm=1;
+                consume_val profile "${value}" i                    ;;
+            -e|--edit)
+                edit_profile=1; consume_val profile "${value}" i    ;;
+            --loglevel)
+                LOGLEVEL="${value:-2}"
+                ;;
+            --logs)
+                consume_val profile "${value}" i || log error \
+                    "Cannot query logs no profile given"
+                AttachToLog "${profile}"                            ;;
+            -s|--shutdown)
+                consume_val profile "${value}" i || log error \
+                        "Cannot shutdown guest no vm specified"
+                ShutdownVM "${profile}"                             ;;
+            -r|--reset)
+                consume_val profile "${value}" i || log error \
+                        "Cannot reset guest no vm specified"
+                ResetVM "${profile}"                                ;;
+            --rename)
+                rename_profile=1
+                [[ $(( ${#args[@]} - i )) -ge 2 ]] || \
+                    log error "only do: --rename 'old_name' 'new_name'"
+                consume_val target "${value}" i
+                target_rename="${args[i+1]:-}"
+                RenameProfile "${target}" "${target_rename}"; return 1  ;;
+            --attach)
+                [[ $(( ${#args[@]} - i )) -ge 2 ]] || \
+                    log error "only do: --attach 'path_to_disk' 'node_name' [profile_name]"
+                consume_val disk_path "${value%,*}" i; \
+                    node_name="${args[i+1]:-}" i=$((i+1))
+                [[ -n "${value}" && "${args[i+1]:-}" != -* ]] && \
+                    profile="${args[i+1]:-}" i=$((i+1))
+                if [[ "${value}" == *,* ]]; then
+                    IFS=$',' read -r arr <<< "${value}"
+                    disk_path="${arr[0]}" disk_format="${arr[1]#*=}"
+                fi
+                AttachDevice "${disk_path}" "${node_name}" \
+                    "${disk_format}" "${profile}"; continue         ;;
+            --create)
+                [[ $(( ${#args[@]} - i )) -ge 2 ]] || \
+                    log error \
+                    "only do: --create [name],[format],[size] [profile_name]"
+                [[ -n "${value}" && "${args[i+1]:-}" != -* ]] && \
+                    profile="${args[i+1]:-}" i=$((i+1))
+                [[ "${value}" == *,* ]] || log error \
+                    "not a valid format use:" \
+                    "--create [name],[format],[size] [profile_name]"
+                local arr=()
+                IFS=$',' read -r -a arr <<< "${value}"
+                img_name="${arr[0]#*=}" img_format="${arr[1]#*=}" img_size="${arr[2]#*=}"
+                CreateImage "${img_name}" "${img_format}" \
+                    "${img_size}" "${profile}"; continue            ;;
+            -*)
+                log error "Invalid arg: '${arg}'"                   ;;
+            *) could_be_valid_profiles+=( "${arg}" )                ;;
+        esac
+    done
+
+    # Set color if on terminal
+    [[ -t 1 ]] && NO_COLOR=0
+
+    # Global Overrides
+    is_flag_enabled "$override_verbose" && VERBOSE=1
+    is_flag_enabled "$override_no_color" && NO_COLOR=1
+    require_var "${profile}" && F_PROFILE_PATH="${D_CONFIG_DIR}/${profile}"
+
+    # No args given?
+    [[ ${#@} -eq 0 ]] && \
+        log use_help "Unsure? use --help I'll tell you everything"
+
+    # Show usage
+    is_flag_enabled "$show_usage" && \
+        { ShowUsage; return 0; }
+
+    # Create if missing
+    mkdir -p "${D_CONFIG_DIR}" "${D_STATE_RUNTIME_DIR}"
+
+    # Default template
+    { is_flag_enabled "$edit_profile" && \
+        ! require_file "${D_CONFIG_DIR}/${profile}"; } && \
+        WriteNewProfile "${img_path}" "${iso_path}" "${comment}"
+
+    # Validate profiles exists
+    require_var "${F_PROFILE_PATH}" && \
+        { require_regular_file "${F_PROFILE_PATH}" || \
+            log error "no such profile exists" \
+            "'$(ColorPath "${F_PROFILE_PATH}")'"; }
+
+    # Delete profile
+    is_flag_enabled "$delete_profile" && \
+        DeleteProfile "${profile}"
+
+    # Edit profile
+    is_flag_enabled "$edit_profile" && \
+        { EditProfile; return 0; }
+
+    # Rename profile
+    is_flag_enabled "$rename_profile" && \
+        { RenameProfile "${target}" "${target_rename}"; return 0; }
+
+    # List available profiles
+    is_flag_enabled "$list_profiles" && \
+        { ListProfiles; return 0; }
+
+    is_flag_enabled "$kill_running_vm" && \
+        { KillRunningVM "${profile}"; return 0; }
+
+    # List available profiles
+    is_flag_enabled "$list_running" && \
+        { ListRunning; return 0; }
+
+    # Edit profile
+    is_flag_enabled "$cat_profile" && \
+        { CatProfile; return 0; }
+
+    # Parse profiles like this -> profileName,key=varX,key=varY
+    for ((i=0;i<${#could_be_valid_profiles[@]};i++)); do
+        p="${could_be_valid_profiles[$i]}"
+
+        IFS=$',' read -r -a p_arr <<< "${p}"
+
+        profile="${p_arr[0]}"
+
+        [[ ! -s "${D_CONFIG_DIR}/${profile}" ]] && \
+            log error "Profile doesn't exist: '${profile}'"
+
+        p_arr=("${p_arr[@]:1:$((${#p_arr[@]}))}")
+        valid_profile="${D_CONFIG_DIR}/${profile}"
+        F_PROFILE_PATH="${valid_profile}"
+        PROFILE_NAME="${F_PROFILE_PATH##*/}"
+
+        for a in "${p_arr[@]}"; do
+            IFS=$'=' read -r key val <<< "${a}"
+            case "${key}" in
+                boot)       override_boot_flag=1                    ;;
+                kvm)        override_kvm_flag="${val:-0}"           ;;
+                ram)        override_guest_memory="${val:-1G}"      ;;
+                net)        override_guest_networking="${val:-nat}" ;;
+                cpu)        override_guest_cpu_model="${val:-host}" ;;
+                disk)       attach_disk="${val:-}"                  ;;
+                name)       node_name="${val:-disk1}"               ;;
+                shutdown)   shutdown_guest=1                        ;;
+                reset)      reset_qemu_vm=1                         ;;
+                kill)       kill_running_vm=1                       ;;
+                log*)       attach_to_log=1                         ;;
+                desc)       desc="${val}"                           ;;
+                *) log error \
+            "Unknown property for '${profile##*/}': ${key}=${val}"  ;;
+            esac
+        done
+
+        mkdir -p "${D_STATE_RUNTIME_DIR}/${PROFILE_NAME}/" || return 1
+
+        # Set gobals
+        STATE_FILE="${D_STATE_RUNTIME_DIR}/${PROFILE_NAME}/state"
+        SOCK_FILE="${D_STATE_RUNTIME_DIR}/${PROFILE_NAME}/sock"
+        LOG_FILE="${D_STATE_RUNTIME_DIR}/${PROFILE_NAME}/log"
+
+        # kill running qemu vm
+        is_flag_enabled "$kill_running_vm" && \
+            { KillRunningVM "${PROFILE_NAME}"; kill_running_vm=0; continue; }
+
+        # Attach a disk
+        require_var "${attach_disk}" && \
+            { AttachDevice "${attach_disk}" "${node_name}" "" \
+                "${PROFILE_NAME}"; attach_disk="" node_name=""; continue; }
+
+        # Attach to logs
+        is_flag_enabled "$attach_to_log" && \
+            { AttachToLog "${PROFILE_NAME}"; attach_to_log=0; continue; }
+
+        # Reset QEMU VM
+        is_flag_enabled "$reset_qemu_vm" && \
+            { ResetVM "${PROFILE_NAME}"; reset_qemu_vm=0; continue; }
+
+        # Graceful shutdown request
+        is_flag_enabled "$shutdown_guest" && \
+            { ShutdownVM "${PROFILE_NAME}"; shutdown_guest=0; continue; }
+
+        # Read & Validate profile
+        ValidateProfile
+
+        # Override QEMU args & reset values
+        is_flag_enabled "$override_boot_flag" && BOOT_FROM_ISO[0]=1 override_boot_flag=0
+        is_flag_enabled "$override_kvm_flag" && GUEST_ACCEL[0]=1 override_kvm_flag=0
+        require_var "${override_guest_memory}" && \
+            GUEST_MEMORY[0]="${override_guest_memory}" override_guest_memory=""
+        require_var "${override_guest_networking}" && \
+            GUEST_NETWORK[0]="${override_guest_networking}" override_guest_networking=""
+        require_var "${override_guest_cpu_model}" && \
+            GUEST_CPU_MODEL[0]="${override_guest_cpu_model}" override_guest_cpu_model=""
+
+        # Start bulding QEMU
+        BuildArgs qemu_args "$i"
+
+        IFS=$',' read -r GUEST_CPU_MODEL <<< \
+            "${GUEST_CPU_MODEL[0]:-${DEFAULT_GUEST_CPU_MODEL}}"
+
+        if is_flag_enabled "$VERBOSE"; then
+            show_launch_summary
+        else
+            printf '%s\n' \
+    "profile:${PROFILE_NAME},guest_ram:${GUEST_MEMORY[0]},boot_from_iso:${BOOT_FROM_ISO[0]}"
+        fi
+
+        qemu-system-x86_64 "${qemu_args[@]}" &
+        printf '%s\n' \
+            "NAME:${PROFILE_NAME}|PID:$!|DESC:${desc:-}|CMD:qemu-system-x86_64 ${qemu_args[*]}" >> \
+                "${STATE_FILE}"
+    done
+
+}
+
+# Main entry
+main "$@"
+

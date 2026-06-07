@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+TEMP_FILE="/tmp/.cava_instances.tmp"
+speed=0.02
+
+function KILL_CAVA() {
+    local -a pids=()
+    mapfile -t pids < <(cat "${TEMP_FILE}")
+    for pid in "${pids[@]}"; do
+        kill -SIGTERM "${pid}"
+    done
+}
+
+function SPAWN_CAVA_INSTANCES() {
+    for ((i=0;i<6;i++)); do
+        footclient cava &>/dev/null &
+        echo "$!" >> "${TEMP_FILE}"
+        sleep "$speed"
+        disown
+    done
+}
+
+function main() {
+    local flag="${1}"
+    local foot_sock="${XDG_RUNTIME_DIR}/foot${WAYLAND_DISPLAY/#/-}.sock"
+    local -i autotiling_pid=0
+
+    [[ -S "${foot_sock}" ]] || foot --server="${foot_sock}" & disown
+
+    [[ "${flag}" =~ ^(CLEAN|clean|KILL|kill)$ ]] && {
+        KILL_CAVA || return 1
+        rm -f "${TEMP_FILE}"
+        return 0
+    }
+
+    pgrep -f "autotiling*" &>/dev/null || \
+        { autotiling &>/dev/null & \
+            autotiling_pid="$!"; sleep 0.1; }
+
+    SPAWN_CAVA_INSTANCES
+    [[ "$autotiling_pid" -ne 0 ]] && kill "$autotiling_pid"
+}
+
+main "$@"
+
