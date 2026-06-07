@@ -78,6 +78,10 @@ in {
                 export WLR_RENDERER=vulkan
             '';
         };
+        niri = {
+            enable = true;
+            package = unstable-pkgs.niri;
+        };
         hyprland = {
             enable = true; # hyprland WM
             package = unstable-pkgs.hyprland;
@@ -210,6 +214,16 @@ in {
     xdg.portal = {
         enable = true;
         wlr.enable = true;
+        extraPortals = with pkgs; [
+            kdePackages.xdg-desktop-portal-kde
+        ];
+        config = {
+            common = {
+                default = [ "wlr" "kde" ];
+                "org.freedesktop.impl.portal.FileChooser" = [ "kde" ];
+            };
+        };
+        xdgOpenUsePortal = true;
     };
 
     # console font

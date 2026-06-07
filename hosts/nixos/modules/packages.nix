@@ -1,4 +1,4 @@
-{ pkgs, unstable-pkgs, zen-browser, ... }:
+{ pkgs, unstable-pkgs, zen-browser, waterfox, ... }:
 
 {
     nixpkgs.config.allowUnfree = true;
@@ -14,12 +14,11 @@
         libao calf easyeffects pavucontrol lsp-plugins
         cava librewolf firefox-bin playerctl jellyfin
         jellyfin-web mpd ncmpcpp pipewire wireplumber
-        zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.default
         # DAWs
         lmms ardour hydrogen carla
 
         # graphics productivity
-        blender krita gimp inkscape
+        blender krita gimp inkscape libreoffice-qt
 
         # system tools
         ryzenadj brightnessctl mesa gnutar zip
@@ -32,7 +31,7 @@
         nvtopPackages.full aria2 curl wget pciutils
         gammastep jq most nix-tree nix-index man
         man-pages man-pages-posix gptfdisk gnupg
-        smartmontools bc psmisc acl groff
+        smartmontools bc psmisc acl groff patchelf
         qemu_full cage weston steam-run dash
         kdePackages.polkit-kde-agent-1
 
@@ -61,7 +60,6 @@
         kdePackages.kdeconnect-kde kdePackages.kclock
         kdePackages.kcolorchooser pastel lf
         powershell pcmanfm vifm-full
-        ferdium
 
         # containers and LLMs
         docker podman ollama
@@ -74,9 +72,7 @@
         # just in case
         wireshark termshark qbittorrent
 
-    ])
-    ++
-    (with unstable-pkgs; [
+    ]) ++ (with unstable-pkgs; [
         # dev tools
         nasm gcc zig clang clang-tools
         libllvm llvm-manpages nodejs sbcl
@@ -88,7 +84,7 @@
 
         # wayland and session tools
         # sway & hyprland
-        swayidle hyprlock swaylock swayimg
+        swayidle hyprlock swaylock swayimg swaybg
         mako wlrctl wlr-randr foot alacritty awww
         hypridle hyprlock colord waybar
         fuzzel wl-clipboard grim slurp wf-recorder
@@ -121,7 +117,11 @@
         # extras tools and utils
         proton-vpn
         opustags
-    ]);
+    ]) ++ ([
+        zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.default
+        waterfox.packages.${pkgs.stdenv.hostPlatform.system}.waterfox-bin
+    ])
+    ;
 
     # system fonts
     fonts.packages = with pkgs; [
