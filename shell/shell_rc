@@ -263,7 +263,8 @@ function Alias_vars() {
     alias colorchoser="env QT_QPA_PLATFORMTHEME=qt6ct kcolorchooser 2> /dev/null & disown"
     alias getcolors="env QT_QPA_PLATFORMTHEME=qt6ct kcolorchooser 2> /dev/null & disown"
     alias ffmpeg="ffmpeg -hide_banner"
-    alias gcaf="git commit --amend --no-edit && git reflog expire --expire=now --all && git gc --prune=now"
+    alias gcaff="git commit --amend --no-edit && git reflog expire --expire=now --all && git gc --prune=now"
+    alias gcaf="git commit --amend --no-edit"
     alias ttyper_H="ttyper --words 20 --language english-advanced"
     alias mpv="env VK_ICD_FILENAMES=\$(printf /usr/share/vulkan/icd.d/*radeon*x86_64.json) mpv --volume=44 --vid=auto --audio-device=pulse"
     alias editor="\$EDITOR"
@@ -1744,6 +1745,14 @@ function Cd() {
     else
         log error "failed to mkdir '${dir}'"
     fi
+}
+
+function time-in-seconds() {
+    local given_time="${1:-}"
+    [[ -n "${given_time}" ]] || \
+        { log error "time format: HH:MM:SS.00"; return 1; }
+    awk -F: 'END { printf "%.2f\n", ( (($1*3600)+($2*60)+$3) ) }' \
+        <<< "${given_time}"
 }
 
 function log-today() {

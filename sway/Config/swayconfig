@@ -48,8 +48,8 @@ bar {
     #* All Keyboards
     input type:keyboard {
         xkb_layout us,es,ru
-        repeat_rate 60
         repeat_delay 240
+        repeat_rate 60
     }
 
     #* All Pointer devices
@@ -198,7 +198,7 @@ bar {
     # Enable floating (don't tile when launched)
         for_window [app_id="^(com.rtosta.zapzap|org.pulseaudio.pavucontrol)$"] floating enable
         for_window [app_id="^(.*Pomodoro.*|.*pomodoro.*|.*udiskie.*)$"] floating enable
-        for_window [app_id="^(nm-connection-editor|.*smile|.*obsproject.*)$"] floating enable
+        for_window [app_id="^(nm-connection-editor|.*emote|.*obsproject.*)$"] floating enable
         for_window [app_id="^(.*pavucontrol.*|.*easyeffects.*)$|.*waterfox.*|vivaldi*"] floating enable
         for_window [app_id="^(org.kde.dolphin|xdg-desktop-portal.*|.*systemmonitor)$"] floating enable
         for_window [app_id="^(blueman-manager|.*konsole|.*elisa)$"] floating enable
@@ -341,11 +341,11 @@ bar {
             bindsym --locked $MOD+Ctrl+Down exec playerctl volume \
                 $( awk 'BEGIN { print $(playerctl volume) - 1/20 }' )
 
-        # Play previous
-            bindsym --locked $MOD+Shift+Down exec playerctl previous
-
         # Play next
             bindsym --locked $MOD+Shift+Up exec playerctl next
+
+        # Play previous
+            bindsym --locked $MOD+Shift+Down exec playerctl previous
 
     #* Gestures *#
 
