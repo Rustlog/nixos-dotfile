@@ -8,6 +8,7 @@ fedora-dev:
 	podman run -dt \
 		--name $(@) \
 		--hostname $(@)-container \
+		-v $(@):/persistant_volume \
 		-p 8026:22 -p 6084:80 -p 6447:443 \
 		localhost/$(@):latest \
 		/usr/bin/tini -- /usr/bin/bash

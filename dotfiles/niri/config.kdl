@@ -246,6 +246,11 @@ binds {
         spawn "~/.config/niri/lock_screen/lock.sh" "set_bg"
     }
 
+    // restart the theme
+    Mod+Shift+C  hotkey-overlay-title="Restart the Theme" {
+        spawn-sh "~/.config/niri/scripts/WaybarThemes 1"
+    }
+
     // show important hotkeys
     Mod+Shift+Slash { show-hotkey-overlay; }
 

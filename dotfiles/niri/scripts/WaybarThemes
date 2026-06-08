@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 
-set -uo pipefail
-set -x
+builtin set -xuo pipefail
+
+# logging
+TMPDIR="${TMPDIR:-/run/user/${UID:-$(id -u)}}"
+LOG_DIR="$TMPDIR/waybar/WaybarThemes"
+mkdir -p "$LOG_DIR"
+exec 1> "$LOG_DIR/waybar.log"
+exec 2>&1
 
 NUM=${1:-1}
 TOTAL_AVAILABLE_THEMES=0 FOUND_SWWW=0
@@ -18,7 +24,6 @@ function toggle_theme() {
         NUM=$(( (NUM % TOTAL_AVAILABLE_THEMES) + 1))
         msg="Started Waybar with profile: ${NUM}"
     elif [[ "${action}" == "reload_current"* ]]; then
-        NUM=${NUM}
         msg="Reloaded Waybar with current profile: $NUM"
     else
         msg="Nothing got selected"
@@ -49,9 +54,11 @@ function main() {
 
     pgrep -f "bash .*${0}" | grep -v "^$$" | xargs -r kill &> /dev/null || true
 
-    for i in "${THEME_DIR}"/[0-9]*; do
-        TOTAL_AVAILABLE_THEMES=$((TOTAL_AVAILABLE_THEMES + 1))
-    done
+    TOTAL_AVAILABLE_THEMES=$( \
+        find "${THEME_DIR}"/[0-9] \
+            -mindepth 0 -maxdepth 0 \
+            -type d -printf '.' | wc -c \
+    )
 
     if command -v "awww-daemon" &> /dev/null; then
         FOUND_SWWW=1; pkill -f '.*awww-daemon'; awww-daemon &>/dev/null & disown
@@ -59,11 +66,13 @@ function main() {
 
     trap 'toggle_theme toggle_next_theme'     SIGUSR1
     trap 'toggle_theme reload_current_theme'  SIGUSR2
-    trap 'exit 0'                             SIGINT SIGTERM
+    trap 'kill $COPROC_PID; exit 0'           SIGINT SIGTERM
 
     toggle_theme toggle_next_theme
 
-    while true; do read -r line || true; done
+    coproc sleep inf
+    # shellcheck disable=SC2034
+    read -r line <&"${COPROC[0]}"
 }
 
 main "${@}"
