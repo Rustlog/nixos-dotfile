@@ -14,7 +14,7 @@ function CD() {
         { printf '[error]: %s\n' "failed to chdir to '${dir}'"; return 1; }
 }
 
-alias dotfiles="CD \${HOME}/dev/projects/repos/dotfiles"
+alias dotfiles="CD ~/dev/projects/repos/nixos-dotfile/dotfiles"
 alias server="CD /srv/www/nginx"
 alias weather="curl -fSL wttr.in/24.5800,80.8369"
 
