@@ -213,14 +213,24 @@ in {
     # XDG portals
     xdg.portal = {
         enable = true;
-        wlr.enable = true;
         extraPortals = with pkgs; [
             kdePackages.xdg-desktop-portal-kde
+            xdg-desktop-portal-gtk
         ];
         config = {
             common = {
-                default = [ "wlr" "kde" ];
+                default = [ "gtk" "kde" ];
                 "org.freedesktop.impl.portal.FileChooser" = [ "kde" ];
+            };
+            niri = {
+                default = [ "gtk" ];
+                "org.freedesktop.impl.portal.FileChooser" = [ "kde" ];
+            };
+            hyprland = {
+                default = [ "hyprland" "gtk" ];
+            };
+            kde = {
+                default = [ "kde" "gtk" ];
             };
         };
         xdgOpenUsePortal = true;
@@ -243,7 +253,6 @@ in {
                 Requires = [ "graphical-session.target" ];
                 After = [ "graphical-session.target" ];
                 PartOf = [ "graphical-session.target" ];
-                bindsTo = [ "graphical-session.target" ];
                 StartLimitIntervalSec = 240;
                 StartLimitBurst = 240;
             };
@@ -252,6 +261,7 @@ in {
                 Restart = "always";
                 RestartSec = 1;
             };
+            bindsTo = [ "graphical-session.target" ];
             wantedBy = [ "graphical-session.target" ];
         };
         # "udiskie-tray" = {

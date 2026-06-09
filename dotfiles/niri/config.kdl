@@ -5,26 +5,33 @@
 spawn-sh-at-startup "~/.config/niri/scripts/WaybarThemes 1"
 spawn-at-startup "playerctld"
 spawn-at-startup "nm-applet" "--indicator"
-spawn-sh-at-startup "sleep 0.4 && easyeffects --gapplication-service"
+spawn-sh-at-startup "sleep 1.8 && easyeffects --gapplication-service"
 spawn-sh-at-startup r##"
-            swayidle -w \
-            timeout 100 "~/.config/niri/lock_screen/lock.sh" \
-            resume "niri msg output "$(niri msg --json outputs | jq -r '.[].name' | tail -n1 )" on" \
-            before-sleep "~/.config/niri/lock_screen/lock.sh set_bg"
-        "##
+        swayidle -w \
+        timeout 100 "~/.config/niri/lock_screen/lock.sh" \
+        resume "niri msg output "$(niri msg --json outputs | jq -r '.[].name' | tail -n1 )" on" \
+        before-sleep "~/.config/niri/lock_screen/lock.sh set_bg"
+    "##
 spawn-at-startup "mako" "--border-size=4" "--border-radius=8" \
-        "--background-color=#333333" "--default-timeout=4000" \
-        "--max-visible=4"
+    "--background-color=#333333" "--default-timeout=4000" \
+    "--max-visible=4"
 spawn-at-startup "udiskie" "--notify" "--no-automount" \
-        "--no-menu-checkbox-workaround" \
-        "--no-menu-update-workaround" \
-        "--no-password-cache" "--appindicator" \
-        "--file-manager" "dolphin" \
-        "--config" "/etc/udiskie/config.yaml" \
-        "--tray"
+    "--no-menu-checkbox-workaround" \
+    "--no-menu-update-workaround" \
+    "--no-password-cache" "--appindicator" \
+    "--file-manager" "dolphin" \
+    "--config" "/etc/udiskie/config.yaml" \
+    "--tray"
+spawn-sh-at-startup r##"
+        sleep 0.6 && \
+        { dbus-update-activation-environment --systemd \
+            DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP && \
+            systemctl --user restart xdg-desktop-portal-gtk xdg-desktop-portal; }
+    "##
 
 // environment variables
 environment {
+    EDITOR                  "nvim"
     QT_QPA_PLATFORM         "wayland"
     QT_QPA_PLATFORMTHEME    "qt6ct"
     GTK_THEME               "Breeze:dark"
@@ -92,7 +99,7 @@ layout {
 }
 
 overview {
-    zoom 0.34
+    zoom 0.46
     backdrop-color "#262626"
     workspace-shadow {
         softness 40
@@ -225,6 +232,11 @@ binds {
 
     // close/kill the focused window
     Mod+Q { close-window; }
+
+    // edit this config
+    Mod+I hotkey-overlay-title="Edit the niri config" {
+        spawn-sh "foot ${EDITOR:-vim} ~/.config/niri/config.kdl"
+    }
 
     // terminal: foot
     Mod+Return hotkey-overlay-title="Terminal: foot" { spawn "foot"; }
