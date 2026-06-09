@@ -10,10 +10,10 @@ RUN pip3 install pylint
 
 RUN ssh-keygen -A && \
     echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
-    echo "root:fedora-root" | chpasswd
+    echo "root:fedora" | chpasswd
 
 RUN mkdir -p /etc/xdg/nvim/
-RUN printf '%b\n' "syntax enable\nse sts=4 sw=4 et\nfiletype plugin indent on" > /etc/xdg/nvim/init.vim
+RUN printf '%b\n' "syntax enable\nse sts=4 sw=4 et\nfiletype plugin indent on\n" > /etc/xdg/nvim/init.vim
 
 EXPOSE 22 80 443
 
