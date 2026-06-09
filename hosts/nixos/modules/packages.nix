@@ -83,12 +83,13 @@
         glow age
 
         # wayland and session tools
-        # sway & hyprland
+        # niri & sway & hyprland
         swayidle hyprlock swaylock swayimg swaybg
         mako wlrctl wlr-randr foot alacritty awww
-        hypridle hyprlock colord waybar
-        fuzzel wl-clipboard grim slurp wf-recorder
-        autotiling
+        hypridle hyprlock colord waybar fuzzel
+        wl-clipboard grim slurp wf-recorder
+        autotiling xwayland-satellite
+        niri
 
         # essential tools
         bash-completion
@@ -113,6 +114,7 @@
 
         # x11 packages
         xinit xorg-server xinput xrandr
+        xhost
 
         # extras tools and utils
         proton-vpn

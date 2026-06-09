@@ -240,7 +240,7 @@ __deploy_dotfiles_mapping: ./dotfiles/dotsync.conf
 
 help: # print this this help menu
 	@printf '%s\n' \
-		"usage: make [action]" \
+		"usage: make [action] VAR=override" \
 		"actions"
 	@awk -F':[[:space:]]*([^#]*)[[:space:]]*#' \
 		'/^[a-zA-Z0-9_-]+:[^#]*#/ { print "    ", $$1, "->", $$2 }' makefile 1>&2
